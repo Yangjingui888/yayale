@@ -1,0 +1,131 @@
+/* ============ UI 特效层：音效 / toast / 底部弹层 / 彩带粒子 / 解锁庆祝 ============ */
+const UI = (() => {
+  /* ---------- WebAudio 轻快音效（无需音频文件） ---------- */
+  let ac = null;
+  function ctx() {
+    if (!ac) { try { ac = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} }
+    if (ac && ac.state === 'suspended') ac.resume();
+    return ac;
+  }
+  function tone(freq, t0, dur, type = 'sine', gain = 0.18) {
+    const c = ctx(); if (!c) return;
+    const o = c.createOscillator(), g = c.createGain();
+    o.type = type; o.frequency.value = freq;
+    g.gain.setValueAtTime(0, c.currentTime + t0);
+    g.gain.linearRampToValueAtTime(gain, c.currentTime + t0 + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.001, c.currentTime + t0 + dur);
+    o.connect(g).connect(c.destination);
+    o.start(c.currentTime + t0); o.stop(c.currentTime + t0 + dur + 0.05);
+  }
+  const sfx = {
+    tap:  () => tone(660, 0, 0.09, 'triangle', 0.12),
+    pop:  () => tone(880, 0, 0.12, 'sine', 0.16),
+    right: () => { tone(523, 0, .12); tone(659, .09, .12); tone(784, .18, .2); },
+    wrong: () => { tone(330, 0, .12, 'triangle'); tone(294, .1, .15, 'triangle'); },
+    star: () => { tone(1046, 0, .1); tone(1318, .07, .1); tone(1568, .14, .18); },
+    unlock: () => { [523, 659, 784, 1046, 1318].forEach((f, i) => tone(f, i * .1, .22, 'sine', .2)); },
+    levelup: () => { [659, 784, 1046, 784, 1046, 1318].forEach((f, i) => tone(f, i * .11, .22)); },
+    feed: () => { tone(500, 0, .08, 'triangle'); tone(700, .08, .12, 'triangle'); },
+  };
+
+  /* ---------- Toast（底部深蓝胶囊） ---------- */
+  function toast(msg) {
+    const layer = document.getElementById('toastLayer');
+    const el = document.createElement('div');
+    el.className = 'toast'; el.textContent = msg;
+    layer.appendChild(el);
+    requestAnimationFrame(() => el.classList.add('show'));
+    setTimeout(() => { el.classList.remove('show'); setTimeout(() => el.remove(), 320); }, 2200);
+  }
+
+  /* ---------- 底部弹层：返回 { el(sheet 容器), close() } ---------- */
+  function dialog(html, { dismissable = true } = {}) {
+    const mask = document.getElementById('modalLayer');
+    const sheet = document.getElementById('sheet');
+    sheet.innerHTML = html;
+    mask.classList.add('show');
+    const close = () => mask.classList.remove('show');
+    mask.onclick = e => { if (dismissable && e.target === mask) close(); };
+    sheet.scrollTop = 0;
+    return { el: sheet, close };
+  }
+
+  /* ---------- 全屏彩带星星粒子 ---------- */
+  const fx = document.getElementById('fxCanvas');
+  const fxc = fx.getContext('2d');
+  let parts = [], raf = null;
+  function sizeFx() { fx.width = innerWidth * devicePixelRatio; fx.height = innerHeight * devicePixelRatio; }
+  addEventListener('resize', sizeFx); sizeFx();
+  function burst(n = 120) {
+    if (!Store.state.settings.anim) return;
+    const dpr = devicePixelRatio;
+    const colors = ['#ffd86f', '#ffb1b9', '#a5ead1', '#8fb8ff', '#c5b8ff'];
+    const chars = ['⭐', '🎉', '✨', '🌟', '', '●'];
+    for (let i = 0; i < n; i++) {
+      parts.push({
+        x: Math.random() * fx.width, y: -20 - Math.random() * fx.height * .4,
+        vx: (Math.random() - .5) * 3 * dpr, vy: (2 + Math.random() * 3.5) * dpr,
+        r: (8 + Math.random() * 14) * dpr / 2, rot: Math.random() * 6.3, vr: (Math.random() - .5) * .2,
+        c: colors[i % colors.length], ch: chars[Math.random() * chars.length | 0], life: 1,
+      });
+    }
+    if (!raf) loop();
+  }
+  function loop() {
+    fxc.clearRect(0, 0, fx.width, fx.height);
+    parts = parts.filter(p => p.life > 0 && p.y < fx.height + 30);
+    parts.forEach(p => {
+      p.x += p.vx; p.y += p.vy; p.rot += p.vr; p.vy += .05;
+      if (p.y > fx.height * .75) p.life -= .03;
+      fxc.save(); fxc.translate(p.x, p.y); fxc.rotate(p.rot);
+      fxc.globalAlpha = Math.max(0, p.life);
+      if (p.ch) { fxc.font = `${p.r * 2}px serif`; fxc.fillText(p.ch, -p.r, p.r); }
+      else { fxc.fillStyle = p.c; fxc.fillRect(-p.r / 2, -p.r, p.r, p.r * 2); }
+      fxc.restore();
+    });
+    if (parts.length) raf = requestAnimationFrame(loop);
+    else { raf = null; fxc.clearRect(0, 0, fx.width, fx.height); }
+  }
+  function glowFlash() {
+    if (!Store.state.settings.anim) return;
+    burst(200);
+  }
+
+  /* ---------- 正向鼓励话术（全程无负面） ---------- */
+  const CHEER_ZH = ['你真棒！', '太厉害啦！', '做得好！', '哇，真聪明！', '继续加油哦！'];
+  const CHEER_NEAR = ['差一点点啦，再试一次～', '没关系，我们再来！', '仔细听一听，你可以的！'];
+  const pick = a => a[Math.random() * a.length | 0];
+  function cheer() { const t = pick(CHEER_ZH); toast(t); TTS.speak({ text: t, lang: 'zh-CN' }); }
+  function cheerNear() { const t = pick(CHEER_NEAR); toast(t); TTS.speak({ text: t, lang: 'zh-CN' }); }
+
+  /* ---------- 新宠物解锁庆祝（demo achievement 风格） ---------- */
+  let celebrating = false;
+  function checkUnlockCelebration() {
+    if (celebrating) return;
+    const idx = Store.peekUnlock();
+    if (idx === null) return;
+    celebrating = true;
+    const p = PETS[idx];
+    sfx.unlock(); burst(160);
+    const d = dialog(`
+      <div class="sheet-head"><h3>新伙伴来啦！</h3><button class="close" data-x="hide">🎉</button></div>
+      <span class="d-em">${p.em}</span>
+      <p>累计积分达到 <b style="color:#5875dc">${ECON.unlockAt(idx)}</b>，自动解锁，积分不清零哦</p>
+      <div class="achievement"><div class="badge">${p.em}</div>
+        <div><b>${p.L} · ${p.en} ${p.name}</b>
+        <small>专属食物：${p.food[2]} ${p.food[0]} · ${p.food[1]}</small></div>
+      </div>`, { dismissable: false });
+    const btn = document.createElement('button');
+    btn.className = 'primary'; btn.textContent = '去看看新伙伴';
+    btn.onclick = () => {
+      Store.popUnlock();
+      d.close(); celebrating = false;
+      TTS.speak({ text: `恭喜你解锁了新宠物 ${p.name}！`, lang: 'zh-CN' });
+      location.hash = '#/pets';
+      setTimeout(() => checkUnlockCelebration(), 800);   // 队列中还有则继续庆祝
+    };
+    d.el.appendChild(btn);
+  }
+
+  return { sfx, toast, dialog, burst, glowFlash, cheer, cheerNear, checkUnlockCelebration };
+})();
