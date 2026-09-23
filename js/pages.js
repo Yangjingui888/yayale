@@ -476,6 +476,169 @@ Pages.parent = (el, arg, done) => {
   };
 };
 
+/* ---------- 记录行公用：星级 + 练习名 + 积分 + 日期（评分 1-3 星，旧记录无分按 3） ---------- */
+const PRACTICE_LABEL = { trace: '✍️ 描红', follow: '🎙️ 跟读', sound: '👂 听音识图', match: '🧩 图文配对', game: '👂 听音识图' };
+function starsHtml(n) {
+  n = Math.min(3, Math.max(1, n || 3));
+  return `<span class="stars">${'★'.repeat(n)}<i>${'★'.repeat(3 - n)}</i></span>`;
+}
+function recRowHtml(r) {
+  const d = new Date(r.completedAt);
+  return `<div class="rec-row"><div class="rec-main"><b>${r.title}</b><small>${PRACTICE_LABEL[r.kind] || r.kind} · 获得 ${r.value} 🟡 · ${d.getMonth() + 1}月${d.getDate()}日 ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}</small></div>${starsHtml(r.score)}</div>`;
+}
+
+/* ---------- ⑦ 登录 / 注册（本机账号，未登录时唯一入口） ---------- */
+Pages.login = (el) => {
+  let mode = 'login';
+  let pickedAvatar = Auth.AVATARS[Math.random() * Auth.AVATARS.length | 0];
+  const draw = () => {
+    el.innerHTML = `
+      <div class="login-wrap">
+        <div class="login-brand"><span class="lb-mark">芽</span><div><b>芽芽乐</b><small>中英双语启蒙小屋</small></div></div>
+        <div class="login-card">
+          <div class="login-tabs">
+            <button class="${mode === 'login' ? 'active' : ''}" data-m="login">登录</button>
+            <button class="${mode === 'reg' ? 'active' : ''}" data-m="reg">注册新账号</button>
+          </div>
+          ${mode === 'login' ? `
+          <label class="fld"><span>账号</span><input id="lu" autocomplete="username" placeholder="汉字 / 字母 / 数字"></label>
+          <label class="fld"><span>密码</span><input id="lp" type="password" autocomplete="current-password" placeholder="请输入密码"></label>
+          <button class="primary login-submit" id="doLogin">进入芽芽乐 →</button>
+          <p class="login-tip">忘记了密码？请超级管理员（账号 admin）帮你重置</p>` : `
+          <label class="fld"><span>账号</span><input id="lu" placeholder="2-12 位，如：小明"></label>
+          <label class="fld"><span>密码</span><input id="lp" type="password" placeholder="至少 4 位"></label>
+          <label class="fld"><span>昵称（选填）</span><input id="ln" maxlength="8" placeholder="和账号一样"></label>
+          <div class="fld fld-avatar"><span>选个头像</span>
+            <div class="avatar-grid">${Auth.AVATARS.map(a => `<button type="button" data-a="${a}" class="${a === pickedAvatar ? 'on' : ''}">${a}</button>`).join('')}</div>
+          </div>
+          <button class="primary login-submit" id="doReg">注册并进入 →</button>`}
+          <div class="form-err" id="loginErr" hidden></div>
+        </div>
+      </div>`;
+    el.querySelectorAll('.login-tabs button').forEach(b => b.onclick = () => { UI.sfx.tap(); mode = b.dataset.m; draw(); });
+    el.querySelectorAll('.avatar-grid button').forEach(b => b.onclick = () => {
+      pickedAvatar = b.dataset.a;
+      el.querySelectorAll('.avatar-grid button').forEach(x => x.classList.toggle('on', x === b));
+    });
+    const err = m => { const e = el.querySelector('#loginErr'); e.textContent = m; e.hidden = false; };
+    if (mode === 'login') {
+      el.querySelector('#doLogin').onclick = async () => {
+        const r = await Auth.login(el.querySelector('#lu').value, el.querySelector('#lp').value);
+        if (!r.ok) return err(r.err);
+        UI.sfx.star(); APP.enter(r.u);
+      };
+    } else {
+      el.querySelector('#doReg').onclick = async () => {
+        const r = await Auth.register(el.querySelector('#lu').value, el.querySelector('#lp').value, el.querySelector('#ln').value, pickedAvatar);
+        if (!r.ok) return err(r.err);
+        UI.sfx.star(); APP.enter(r.u);
+      };
+    }
+  };
+  draw();
+};
+
+/* ---------- ⑧ 个人中心：账号 / 资料 / 改密 / 练习记录 / 超管管理 / 退出 ---------- */
+Pages.me = (el) => {
+  if (!Auth.get()) return location.hash = '#/login';
+  const draw = () => {
+    const a = Auth.get();
+    const recs = Store.recordList();
+    el.innerHTML = `
+      <div class="sub-top back-row"><button class="back" id="pgBack">‹</button>
+        <div><h1>个人中心</h1><small>账号与学习小档案 · 数据仅保存在本机</small></div></div>
+
+      <div class="parent-card"><h3>我的账号</h3>
+        <div class="me-id"><span class="me-avatar">${a.avatar}</span>
+          <div><b>${a.nickname}</b>${a.role === 'admin' ? '<em class="me-badge">超级管理员</em>' : ''}
+            <small>账号 ${a.u} · 注册于 ${new Date(a.createdAt).toLocaleDateString()}</small></div>
+        </div>
+      </div>
+
+      <div class="parent-card"><h3>个人资料</h3>
+        <label class="fld"><span>昵称</span><input id="meNick" maxlength="8" value="${a.nickname}"></label>
+        <div class="fld fld-avatar"><span>头像</span>
+          <div class="avatar-grid">${Auth.AVATARS.map(x => `<button type="button" data-a="${x}" class="${x === a.avatar ? 'on' : ''}">${x}</button>`).join('')}</div></div>
+        <button class="primary" id="meSave" style="margin-top:10px">保存资料</button>
+      </div>
+
+      <div class="parent-card"><h3>修改密码</h3>
+        <label class="fld"><span>旧密码</span><input id="po" type="password"></label>
+        <label class="fld"><span>新密码（至少 4 位）</span><input id="pn" type="password"></label>
+        <button class="primary" id="pwdBtn">确认修改</button>
+        <div class="form-err" id="pwdErr" hidden></div>
+      </div>
+
+      <div class="parent-card"><h3>📒 我的练习记录</h3>
+        <p class="me-note">重复练习只保留最新一次成绩</p>
+        ${recs.length ? `<div class="rec-list">${recs.slice(0, 50).map(recRowHtml).join('')}</div>` : '<p class="me-empty">还没有练习记录，快去学一关吧</p>'}
+      </div>
+
+      ${Auth.isAdmin() ? `
+      <div class="parent-card"><h3>🛡️ 账号管理（超级管理员）</h3>
+        <p class="me-note">孩子忘记了密码？在这里重置。删除账号会同时清空它在本机的学习存档。</p>
+        <div class="admin-list">${Auth.listUsers().map(u => `
+          <div class="admin-row"><span class="admin-av">${u.avatar}</span>
+            <div class="admin-info"><b>${u.nickname}</b><small>${u.u} · ${u.role === 'admin' ? '超管' : '用户'} · ${new Date(u.createdAt).toLocaleDateString()}</small></div>
+            ${u.u === Auth.ADMIN ? '<span class="admin-fixed">不可操作</span>' : `<button class="mini-btn" data-reset="${u.u}">重置密码</button><button class="mini-btn danger" data-del="${u.u}">删除</button>`}
+          </div>`).join('')}</div>
+      </div>` : ''}
+
+      <div class="parent-card"><button class="primary warn" id="logoutBtn" style="width:100%">退出登录</button></div>`;
+
+    el.querySelector('#pgBack').onclick = () => { TTS.stop(); location.hash = '#/home'; };
+    let picked = a.avatar;
+    el.querySelectorAll('.avatar-grid button').forEach(b => b.onclick = () => {
+      picked = b.dataset.a;
+      el.querySelectorAll('.avatar-grid button').forEach(x => x.classList.toggle('on', x === b));
+    });
+    el.querySelector('#meSave').onclick = () => {
+      Auth.updateProfile({ nickname: el.querySelector('#meNick').value, avatar: picked });
+      UI.toast('资料已保存'); APP.hud(); draw();
+    };
+    el.querySelector('#pwdBtn').onclick = async () => {
+      const e = el.querySelector('#pwdErr'); e.hidden = true;
+      const r = await Auth.changePassword(el.querySelector('#po').value, el.querySelector('#pn').value);
+      if (!r.ok) { e.textContent = r.err; e.hidden = false; return; }
+      UI.toast('密码修改成功，下次登录用新密码哦'); draw();
+    };
+    if (Auth.isAdmin()) {
+      el.querySelectorAll('[data-reset]').forEach(b => b.onclick = () => {
+        const target = b.dataset.reset;
+        const d = openSheet(`<div class="sheet-head"><h3>重置「${target}」的密码</h3><button class="close" data-x="hide">×</button></div>
+          <label class="fld"><span>新密码（至少 4 位）</span><input id="np" type="text"></label>
+          <div class="btns"><button class="primary" data-x="ok">确认重置</button></div>`);
+        d.el.querySelector('[data-x="ok"]').onclick = async () => {
+          const r = await Auth.resetPasswordByAdmin(target, d.el.querySelector('#np').value);
+          if (!r.ok) return UI.toast(r.err);
+          d.close(); UI.toast('已重置，告诉小朋友新密码吧');
+        };
+      });
+      el.querySelectorAll('[data-del]').forEach(b => b.onclick = () => {
+        const target = b.dataset.del;
+        const d = openSheet(`<div class="sheet-head"><h3>删除账号 ${target}？</h3><button class="close" data-x="hide">×</button></div>
+          <p class="study-sub">它的本机学习存档会一起删除，无法恢复</p>
+          <div class="btns"><button class="primary ghost" data-x="no">取消</button><button class="primary" data-x="yes" style="background:#ef7b7b">确认删除</button></div>`);
+        d.el.querySelector('[data-x="no"]').onclick = () => d.close();
+        d.el.querySelector('[data-x="yes"]').onclick = () => {
+          const r = Auth.deleteUser(target);
+          d.close();
+          if (!r.ok) return UI.toast(r.err);
+          UI.toast('账号已删除'); draw();
+        };
+      });
+    }
+    el.querySelector('#logoutBtn').onclick = () => {
+      const d = openSheet(`<div class="sheet-head"><h3>退出登录？</h3><button class="close" data-x="hide">×</button></div>
+        <p class="study-sub">学习存档会保留，下次用这个账号登录就能继续</p>
+        <div class="btns"><button class="primary ghost" data-x="no">再想想</button><button class="primary" data-x="yes">退出</button></div>`);
+      d.el.querySelector('[data-x="no"]').onclick = () => d.close();
+      d.el.querySelector('[data-x="yes"]').onclick = () => APP.logout();
+    };
+  };
+  draw();
+};
+
 /* 动效开关：body.no-motion + 去阴影（demo toggleSetting 同款） */
 function applyMotion() {
   const on = Store.state.motion;

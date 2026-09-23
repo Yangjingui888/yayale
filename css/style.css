@@ -4,6 +4,9 @@
   --blue: #607ff2; --mint: #a5ead1; --yellow: #ffd86f; --pink: #ffb1b9;
   --bg: #f6fbff; --card: #fff; --line: #edf1f7;
   --shadow: 0 12px 30px rgba(74, 108, 170, .12);
+  /* 响应式断点：容器宽度 / 弹层宽度 / 安全区适配 */
+  --app-max: 430px; --sheet-max: 430px;
+  --nav-h: 76px; --safe-b: env(safe-area-inset-bottom, 0px);
 }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; margin: 0; padding: 0; }
 html, body { margin: 0; }
@@ -19,17 +22,17 @@ button:active { transform: scale(.97); }
 b { font-weight: 700; }
 small { font-weight: 400; }
 
-/* ---------- 手机壳容器 ---------- */
-.app { width: 100%; max-width: 430px; min-height: 100vh; background: var(--bg); position: relative; overflow: hidden; }
+/* ---------- 响应式容器：自动撑满可用宽度，带安全区 ---------- */
+.app { width: 100%; max-width: var(--app-max); min-height: 100vh; min-height: 100dvh; background: var(--bg); position: relative; overflow: hidden; }
 .app::before { content: ""; position: absolute; width: 310px; height: 310px; right: -145px; top: -110px; border-radius: 50%; background: #dcf8ff; }
 .app::after { content: ""; position: absolute; width: 260px; height: 260px; left: -160px; top: 300px; border-radius: 50%; background: #fff3d0; }
-.screen { position: relative; z-index: 1; min-height: 100vh; padding-bottom: 92px; }
+.screen { position: relative; z-index: 1; min-height: 100vh; min-height: 100dvh; padding-bottom: calc(var(--nav-h) + var(--safe-b) + 12px); }
 .view { position: relative; }
 
 /* ---------- 顶部品牌栏 ---------- */
 .hud {
   position: sticky; top: 0; z-index: 20;
-  padding: 22px 19px 12px; display: flex; align-items: center; justify-content: space-between;
+  padding: calc(16px + env(safe-area-inset-top, 0px)) 19px 12px; display: flex; align-items: center; justify-content: space-between;
   background: linear-gradient(var(--bg), rgba(246, 251, 255, .85)); backdrop-filter: blur(8px);
 }
 .brand { display: flex; gap: 10px; align-items: center; }
@@ -93,12 +96,12 @@ small { font-weight: 400; }
 .pet-teaser p { color: #8a7f68; font-size: 11px; line-height: 1.5; }
 .pill-btn { padding: 9px 12px; border-radius: 12px; background: #fff; color: #d08d43; font-weight: 800; font-size: 11px; box-shadow: 0 5px 10px #b9913a16; }
 
-/* ---------- 底部导航 ---------- */
+/* ---------- 底部导航（宽度跟随容器 + 手势安全区） ---------- */
 .bottom-nav {
   position: fixed; z-index: 10; bottom: 0; left: 50%; transform: translateX(-50%);
-  width: min(430px, 100%); height: 76px; background: #ffffffee; backdrop-filter: blur(15px);
+  width: min(var(--app-max), 100%); min-height: var(--nav-h); background: #ffffffee; backdrop-filter: blur(15px);
   display: grid; grid-template-columns: repeat(3, 1fr);
-  border-top: 1px solid var(--line); padding: 8px 20px 10px;
+  border-top: 1px solid var(--line); padding: 8px 20px calc(10px + var(--safe-b));
 }
 .nav-item { color: #a1aec2; font-size: 11px; font-weight: 700; display: flex; flex-direction: column; gap: 3px; align-items: center; justify-content: center; border-radius: 16px; }
 .nav-item strong { font-size: 23px; line-height: 1; font-weight: 400; transition: transform .15s; }
@@ -284,7 +287,7 @@ small { font-weight: 400; }
 /* ---------- 底部弹层 sheet ---------- */
 .modal-mask { display: none; position: fixed; z-index: 30; inset: 0; background: #30416155; align-items: flex-end; justify-content: center; }
 .modal-mask.show { display: flex; }
-.sheet { width: min(430px, 100%); max-height: 88vh; overflow: auto; background: #fff; border-radius: 28px 28px 0 0; padding: 18px 18px 28px; animation: up .25s ease; text-align: center; }
+.sheet { width: min(var(--sheet-max), 100%); max-height: min(88vh, 88dvh); overflow: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; background: #fff; border-radius: 28px 28px 0 0; padding: 18px 18px calc(28px + var(--safe-b)); animation: up .25s ease; text-align: center; }
 @keyframes up { from { transform: translateY(80px); opacity: .4; } to { transform: none; opacity: 1; } }
 .sheet-head { display: flex; align-items: center; justify-content: space-between; }
 .sheet-head h3 { font-size: 18px; }
@@ -306,7 +309,7 @@ small { font-weight: 400; }
 .rule-row b { color: #647fe0; }
 
 /* ---------- Toast ---------- */
-.toast-layer { position: fixed; z-index: 50; left: 50%; bottom: 92px; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 8px; pointer-events: none; width: max-content; max-width: 86vw; }
+.toast-layer { position: fixed; z-index: 50; left: 50%; bottom: calc(var(--nav-h) + var(--safe-b) + 16px); transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 8px; pointer-events: none; width: max-content; max-width: 86vw; }
 .toast { background: #263759ef; color: #fff; padding: 10px 16px; border-radius: 99px; font-size: 12px; opacity: 0; transform: translateY(12px); transition: .25s; white-space: nowrap; }
 .toast.show { opacity: 1; transform: translateY(0); }
 
@@ -387,7 +390,240 @@ small { font-weight: 400; }
 /* ---------- 动画关闭（demo no-motion） ---------- */
 .no-motion *, .no-motion *::before, .no-motion *::after { animation: none !important; transition: none !important; }
 
+/* ============================================================
+   响应式适配：手机（默认）→ 大屏手机/平板竖屏 → 平板横屏/桌面
+   ============================================================ */
+
+/* ---------- 小屏手机收紧 ---------- */
 @media (max-width: 380px) {
+  :root { --nav-h: 68px; }
+  .hud { padding-left: 13px; padding-right: 13px; }
+  .coin { padding: 5px 7px; font-size: 11px; }
+  .hero { margin: 4px 11px 12px; padding: 15px 13px 13px; }
   .hero h1 { font-size: 21px; }
+  .hero-pet { font-size: 46px; }
+  .modules, .lesson-list, .pets-wrap, .lesson-filter, .learn-tabs { padding-left: 11px; padding-right: 11px; }
+  .module { min-height: 118px; padding: 12px 11px; }
+  .module b { font-size: 15px; }
+  .progress-card, .pet-teaser { margin-left: 11px; margin-right: 11px; }
+  .learn-hero { margin-left: 11px; margin-right: 11px; }
+  .study-card { margin-left: 11px; margin-right: 11px; }
+  .sheet .study-card { margin-left: 0; margin-right: 0; }
+  .study-visual { font-size: 66px; min-height: 74px; }
   .big-pet { font-size: 92px; }
+  .detail-hero, .detail-card, .detail-actions { margin-left: 11px; margin-right: 11px; }
+  .play-row { margin-left: 11px; margin-right: 11px; }
+  .parent-card { margin-left: 11px; margin-right: 11px; }
+  .trace-wrap { width: 205px; height: 205px; }
+  .trace-wrap b { font-size: 138px; }
+  .quiz-picture { font-size: 52px; }
+  .detail-actions button { font-size: 10px; padding: 11px 3px; }
+}
+
+/* ---------- 大屏手机 / 平板竖屏：适度放大 + 多列 ---------- */
+@media (min-width: 700px) {
+  :root { --app-max: 700px; --sheet-max: 580px; --nav-h: 82px; }
+  .hud { padding-left: 26px; padding-right: 26px; }
+  .hero { margin: 8px 24px 18px; padding: 24px 26px 20px; border-radius: 32px; }
+  .hero h1 { font-size: 30px; }
+  .hero p { font-size: 15px; margin: 10px 0 18px; }
+  .hero-btn { padding: 14px 20px; font-size: 15px; }
+  .hero-pet { font-size: 76px; }
+  .section-head { padding: 0 26px 10px; }
+  .modules { grid-template-columns: repeat(4, 1fr); gap: 12px; padding: 0 24px; }
+  .module { min-height: 150px; }
+  .module b { font-size: 16px; }
+  .module .ico { font-size: 36px; margin-top: 10px; }
+  .progress-card, .pet-teaser { margin-left: 24px; margin-right: 24px; }
+  .pet-teaser-art { width: 84px; height: 84px; font-size: 54px; }
+  .sub-top { padding: 24px 24px 14px; }
+  .learn-hero { margin-left: 24px; margin-right: 24px; padding: 22px; min-height: 165px; }
+  .learn-hero h2 { font-size: 26px; }
+  .learn-hero p { font-size: 13px; max-width: 60%; }
+  .learn-hero-art { font-size: 84px; right: 26px; }
+  .learn-tabs { padding: 0 24px 12px; }
+  .learn-tabs button { font-size: 14px; padding: 12px 6px; }
+  .lesson-filter { padding: 0 24px 12px; }
+  .lesson-filter button { font-size: 12.5px; padding: 8px 15px; }
+  .lesson-list { padding: 0 24px; gap: 12px; }
+  .lesson { padding: 14px; }
+  .lesson-icon { width: 58px; height: 58px; font-size: 26px; }
+  .lesson-main b { font-size: 16px; }
+  .lesson-main small { font-size: 12px; white-space: normal; }
+  .lesson > button { padding: 10px 14px; font-size: 12.5px; }
+  .play-row { margin-left: 24px; margin-right: 24px; font-size: 13px; }
+  .study-card { margin-left: 24px; margin-right: 24px; padding: 22px; }
+  .sheet .study-card { margin-left: 0; margin-right: 0; }
+  .study-visual { font-size: 104px; min-height: 115px; }
+  .study-word { font-size: 22px; }
+  .study-sub { font-size: 13px; }
+  .practice-nav button { font-size: 12px; padding: 11px 4px; }
+  .action-grid { grid-template-columns: repeat(4, 1fr); }
+  .action-btn .ab-ico { font-size: 30px; }
+  .action-btn .ab-label { font-size: 14.5px; }
+  .trace-wrap { width: 300px; height: 300px; }
+  .trace-wrap b { font-size: 200px; }
+  .mic { width: 92px; height: 92px; font-size: 38px; }
+  .meter { width: 250px; }
+  .quiz-picture { font-size: 82px; }
+  .quiz-option { padding: 15px; font-size: 16px; }
+  .pets-wrap { padding: 0 24px; }
+  .pet-banner { padding: 20px; }
+  .pet-banner h2 { font-size: 22px; }
+  .pet-banner-art { font-size: 66px; }
+  .pet-grid { grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .pet { padding: 14px 8px 12px; }
+  .pet b { font-size: 13px; }
+  .pet-art { height: 72px; font-size: 48px; }
+  .detail-hero { margin-left: 24px; margin-right: 24px; padding: 26px 22px 20px; }
+  .big-pet { font-size: 130px; }
+  .detail-card, .detail-actions { margin-left: 24px; margin-right: 24px; }
+  .detail-actions { gap: 12px; }
+  .detail-actions button { padding: 15px 8px; font-size: 12.5px; }
+  .skins { grid-template-columns: repeat(4, 1fr); }
+  .dress-grid { gap: 12px; }
+  .dress-card b { font-size: 12.5px; }
+  .dress-card small { font-size: 10.5px; }
+  .parent-card { margin-left: 24px; margin-right: 24px; padding: 20px; }
+  .stats { grid-template-columns: repeat(3, 1fr); }
+  .stat b { font-size: 23px; }
+  .gate { margin-top: 48px; }
+  .lock-box { max-width: 420px; padding: 36px 30px; }
+  .sheet { padding-left: 22px; padding-right: 22px; }
+}
+
+/* ---------- 平板横屏 / 桌面宽屏：两栏布局 ---------- */
+@media (min-width: 980px) {
+  :root { --app-max: 880px; }
+  .app::before { width: 460px; height: 460px; right: -170px; }
+  .pet-grid { grid-template-columns: repeat(5, 1fr); }
+  .stats { grid-template-columns: repeat(5, 1fr); }
+  /* 首页：进度卡与宠物预告并排 */
+  .view[data-page="home"] { display: grid; grid-template-columns: 1fr 1fr; gap: 0 18px; align-content: start; }
+  .view[data-page="home"] .hero,
+  .view[data-page="home"] .section-head,
+  .view[data-page="home"] .modules { grid-column: 1 / -1; }
+  .view[data-page="home"] .progress-card { grid-column: 1; }
+  .view[data-page="home"] .pet-teaser { grid-column: 2; }
+  /* 宠物详情：左侧形象常驻，右侧养成/收集 */
+  .view[data-page="pet"] { display: grid; grid-template-columns: 5fr 7fr; gap: 0 18px; align-content: start; padding: 0 24px; }
+  .view[data-page="pet"] .sub-top { grid-column: 1 / -1; margin: 0 -24px; }
+  .view[data-page="pet"] .detail-hero { grid-column: 1; margin: 0; position: sticky; top: 96px; align-self: start; }
+  .view[data-page="pet"] .detail-card,
+  .view[data-page="pet"] .detail-actions { grid-column: 2; margin-left: 0; margin-right: 0; }
+  .view[data-page="pet"] .detail-card:first-of-type { margin-top: 0; }
+  /* 学习页：左横幅常驻，右课时列表 */
+  .view[data-page="learn"] { display: grid; grid-template-columns: 5fr 7fr; gap: 0 18px; align-content: start; padding: 0 24px; }
+  .view[data-page="learn"] .sub-top { grid-column: 1 / -1; margin: 0 -24px; }
+  .view[data-page="learn"] .learn-hero { grid-column: 1; margin: 0 0 16px; position: sticky; top: 96px; align-self: start; }
+  .view[data-page="learn"] .learn-tabs,
+  .view[data-page="learn"] .lesson-filter,
+  .view[data-page="learn"] .lesson-list,
+  .view[data-page="learn"] .play-row { grid-column: 2; margin-left: 0; margin-right: 0; padding-left: 0; padding-right: 0; }
+  .view[data-page="learn"] .play-row { margin-top: 16px; }
+  /* 家长中心：卡片两列 */
+  .view[data-page="parent"] { display: grid; grid-template-columns: 1fr 1fr; gap: 0 18px; align-content: start; }
+  .view[data-page="parent"] .sub-top { grid-column: 1 / -1; }
+  .view[data-page="parent"] .gate { grid-column: 1 / -1; justify-self: center; }
+  .view[data-page="parent"] .parent-card { margin: 0 0 14px; }
+}
+
+/* ---------- 横屏矮屏手机：压缩纵向高度，弹层限高可滚 ---------- */
+@media (orientation: landscape) and (max-height: 580px) {
+  .hero { margin-top: 2px; margin-bottom: 10px; padding: 13px 16px; }
+  .hero h1 { font-size: 21px; }
+  .hero p { margin: 5px 0 9px; font-size: 12px; }
+  .hero-pet { font-size: 44px; }
+  .learn-hero { min-height: 0; padding: 14px 16px; }
+  .learn-hero-art { font-size: 50px; }
+  .big-pet { font-size: 82px; }
+  .study-visual { font-size: 58px; min-height: 64px; margin: 4px 0; }
+  .study-card { padding: 13px; }
+  .trace-wrap { width: min(42vh, 240px); height: min(42vh, 240px); margin: 6px auto 4px; }
+  .trace-wrap b { font-size: 128px; }
+  .mic { width: 60px; height: 60px; font-size: 25px; }
+  .meter { margin-top: 8px; }
+  .sheet { max-height: 94dvh; padding-top: 12px; padding-bottom: calc(16px + var(--safe-b)); }
+  .practice-nav { margin: 6px 0 2px; }
+  .quiz-picture { font-size: 44px; margin: 2px 0; }
+  .pet-teaser-art { width: 52px; height: 52px; font-size: 34px; }
+}
+
+/* ============ 账号登录 · 个人中心 · 判分星级 · 练习记录 · 录音回听 ============ */
+/* 登录门：未登录隐藏 HUD 与底导 */
+.logged-out #hud, .logged-out .bottom-nav { display: none; }
+.logged-out .screen { padding-bottom: 12px; }
+.hud-me { width: 34px; height: 34px; border-radius: 12px; background: #fff; box-shadow: var(--shadow); font-size: 17px; display: grid; place-items: center; margin-left: 2px; }
+
+/* 登录页 */
+.login-wrap { padding: 44px 22px 20px; }
+.login-brand { display: flex; gap: 12px; align-items: center; margin-bottom: 20px; }
+.login-brand .lb-mark { width: 54px; height: 54px; border-radius: 18px 22px 18px 24px; background: linear-gradient(135deg, #7d97ff, #5b7bf0); color: #fff; font-size: 27px; font-weight: 800; display: grid; place-items: center; box-shadow: var(--shadow); }
+.login-brand b { display: block; font-size: 20px; }
+.login-brand small { color: var(--muted); font-size: 12px; }
+.login-card { background: #fff; border-radius: 24px; box-shadow: var(--shadow); padding: 18px 16px 20px; }
+.login-tabs { display: flex; background: #eef2f8; border-radius: 14px; padding: 4px; margin-bottom: 16px; }
+.login-tabs button { flex: 1; padding: 9px 0; border-radius: 11px; font-size: 13px; font-weight: 700; color: #7c8aa2; }
+.login-tabs button.active { background: #fff; color: var(--ink); box-shadow: 0 3px 8px rgba(74, 108, 170, .14); }
+.login-submit { display: block; width: 100%; margin-top: 6px; }
+.login-tip { font-size: 11px; color: var(--muted); text-align: center; margin-top: 12px; line-height: 1.6; }
+
+/* 表单域 */
+.fld { display: block; margin-bottom: 12px; }
+.fld > span { display: block; font-size: 12px; font-weight: 700; color: #66758e; margin-bottom: 5px; }
+.fld input { width: 100%; padding: 11px 13px; border: 2px solid var(--line); border-radius: 13px; background: #f8fafd; font-size: 14px; color: var(--ink); outline: none; font-family: inherit; }
+.fld input:focus { border-color: var(--blue); background: #fff; }
+.form-err { margin-top: 10px; padding: 9px 12px; border-radius: 12px; background: #ffeef0; color: #e05252; font-size: 12px; font-weight: 700; }
+.fld-avatar > span { margin-bottom: 7px; }
+.avatar-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 7px; }
+.avatar-grid button { aspect-ratio: 1; border-radius: 12px; background: #f4f7fc; border: 2px solid transparent; font-size: 21px; display: grid; place-items: center; }
+.avatar-grid button.on { border-color: var(--blue); background: #eef2ff; }
+
+/* 个人中心 */
+.me-id { display: flex; gap: 12px; align-items: center; }
+.me-avatar { width: 54px; height: 54px; border-radius: 18px; background: linear-gradient(135deg, #e8f5ff, #fff3d0); display: grid; place-items: center; font-size: 29px; box-shadow: var(--shadow); flex: none; }
+.me-id b { font-size: 16px; }
+.me-id small { display: block; color: var(--muted); font-size: 11px; margin-top: 3px; }
+.me-badge { display: inline-block; vertical-align: 2px; margin-left: 6px; padding: 2px 8px; border-radius: 999px; background: #fff0c8; color: #ad7b28; font-size: 10px; font-weight: 800; font-style: normal; }
+.me-note { font-size: 11px; color: var(--muted); line-height: 1.6; margin-bottom: 10px; }
+.me-empty { font-size: 12px; color: var(--muted); text-align: center; padding: 14px 0; }
+
+/* 星级 */
+.stars { color: #e9a23b; font-size: 14px; letter-spacing: 1px; flex: none; }
+.stars i { font-style: normal; color: #dfe6f0; }
+
+/* 练习记录列表 */
+.rec-toggle { display: block; width: 100%; margin-top: 12px; padding: 10px; border-radius: 14px; background: #eef4ff; color: #5c74b9; font-size: 12px; font-weight: 800; }
+.rec-list { display: flex; flex-direction: column; gap: 8px; }
+.rec-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 15px; background: #f8fafd; }
+.rec-main { flex: 1; min-width: 0; }
+.rec-main b { display: block; font-size: 13px; }
+.rec-main small { color: var(--muted); font-size: 11px; }
+
+/* 超管账号管理 */
+.admin-list { display: flex; flex-direction: column; gap: 8px; }
+.admin-row { display: flex; align-items: center; gap: 9px; padding: 9px 10px; border-radius: 15px; background: #f8fafd; }
+.admin-av { width: 34px; height: 34px; border-radius: 12px; background: #fff; box-shadow: var(--shadow); display: grid; place-items: center; font-size: 17px; flex: none; }
+.admin-info { flex: 1; min-width: 0; }
+.admin-info b { display: block; font-size: 13px; }
+.admin-info small { color: var(--muted); font-size: 10px; }
+.admin-fixed { font-size: 10px; color: var(--muted); }
+.mini-btn { padding: 7px 10px; border-radius: 11px; background: #eef2ff; color: #5c74b9; font-size: 11px; font-weight: 800; flex: none; }
+.mini-btn.danger { background: #ffeef0; color: #e05252; }
+
+/* 跟读录音回听 */
+.clip-box { margin-top: 12px; padding: 10px 12px; border-radius: 15px; background: #f2f8f4; text-align: left; }
+.clip-box > span { display: block; font-size: 11px; font-weight: 800; color: #56a37a; margin-bottom: 6px; }
+.clip-audio { width: 100%; height: 36px; }
+
+@media (min-width: 700px) {
+  .login-wrap { padding: 60px calc(50% - 240px) 30px; }
+  .avatar-grid { grid-template-columns: repeat(8, 1fr); }
+}
+@media (min-width: 980px) {
+  .view[data-page="me"] { display: grid; grid-template-columns: 1fr 1fr; gap: 0 18px; align-content: start; padding: 0 24px; }
+  .view[data-page="me"] .sub-top { grid-column: 1 / -1; margin: 0 -24px; }
+  .view[data-page="me"] .parent-card { margin: 0 0 14px; }
+  .view[data-page="me"] .parent-card:nth-of-type(2) { grid-column: 1; }
+  .login-card { max-width: 460px; margin: 0 auto; }
 }

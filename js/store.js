@@ -1,13 +1,15 @@
-/* ============ 全局状态（demo 状态模型 + localStorage 本地存档） ============ */
+/* ============ 全局状态（demo 状态模型 + 按账号隔离的 localStorage 存档） ============ */
 const Store = (() => {
-  const KEY = 'qiqu启蒙乐园v1';
+  const SAVE_PREFIX = 'qiqu启蒙乐园v2:';   // 每账号一份存档：前缀 + 用户名
+  const OLD_KEY = 'qiqu启蒙乐园v1';        // 升级前的单一存档（迁移给首个登录账号）
+  const MIG_KEY = 'qiqu-启蒙乐园-migrated';
   const defaultState = () => ({
     v: 2,                   // 存档版本：旧版结构自动重置
     points: 0,              // 积分余额（购粮消耗；买皮肤耗星星）
     stars: 0,               // 星星余额
     lifetimePoints: 0,      // 累计积分（解锁依据，只增不减）
     completed: [],          // 已完成的课时 key（首次通关判定）
-    practiceRecords: [],    // 练习记录（近 500 条，练习打勾依据）
+    practiceRecords: [],    // 练习记录（近 500 条，带 1-3 星评分，练习打勾依据）
     learned: { letters: 0, words: 0, hanzi: 0, pinyin: 0 },
     minutes: 0,             // 总学习分钟（completeTask +1，兼容 tick 秒表）
     seconds: 0,
@@ -22,10 +24,34 @@ const Store = (() => {
     daily: { date: '', keys: [] },   // 今日练过的课时（首页进度卡）
   });
 
-  let s = load();
+  let user = null;
+  let s = defaultState();
+
+  /* 旧版单存档一次性迁移给首个登录账号（旧记录无评分按满星 3 记） */
+  function migrateIfNeeded(username) {
+    try {
+      if (localStorage.getItem(MIG_KEY)) return;
+      const raw = localStorage.getItem(OLD_KEY);
+      if (raw && !localStorage.getItem(SAVE_PREFIX + username)) {
+        const obj = JSON.parse(raw);
+        if (obj && obj.v === 2) localStorage.setItem(SAVE_PREFIX + username, JSON.stringify(obj));
+      }
+      localStorage.setItem(MIG_KEY, '1');
+    } catch (e) {}
+  }
+
+  /* 登录 / 切账号时显式装载该账号存档 */
+  function use(username) {
+    if (!username || user === username) return;
+    migrateIfNeeded(username);
+    user = username;
+    s = load();
+    unlockQueue = [];
+    save();
+  }
   function load() {
     try {
-      const raw = localStorage.getItem(KEY);
+      const raw = localStorage.getItem(SAVE_PREFIX + user);
       if (raw) {
         const obj = JSON.parse(raw);
         if (obj && obj.v === 2) return Object.assign(defaultState(), obj);   // 旧结构自动重置
@@ -34,7 +60,8 @@ const Store = (() => {
     return defaultState();
   }
   function save() {
-    try { localStorage.setItem(KEY, JSON.stringify(s)); } catch (e) {}
+    if (!user) return;
+    try { localStorage.setItem(SAVE_PREFIX + user, JSON.stringify(s)); } catch (e) {}
     window.dispatchEvent(new Event('qsave'));
   }
 
@@ -93,13 +120,24 @@ const Store = (() => {
   function isCompleted(key) { return s.completed.includes(key); }
   function markCompleted(key) { if (!s.completed.includes(key)) { s.completed.push(key); s.learned[learnedKey(key)] = (s.learned[learnedKey(key)] || 0) + 1; } }
   function learnedKey(key) { return key.split('-')[0]; }
-  function recordPractice(module, index, kind, title, value) {
-    s.practiceRecords.push({ id: Date.now() + '-' + Math.random().toString(36).slice(2, 7), module, index, kind, title, value, completedAt: new Date().toISOString() });
+  function recordPractice(module, index, kind, title, value, score) {
+    s.practiceRecords.push({ id: Date.now() + '-' + Math.random().toString(36).slice(2, 7), module, index, kind, title, value, score: score || 3, completedAt: new Date().toISOString() });
     if (s.practiceRecords.length > 500) s.practiceRecords = s.practiceRecords.slice(-500);
     markDaily(keyOf(module, index));
   }
   function practiceDone(module, index, kind) {
     return s.practiceRecords.some(r => r.module === module && String(r.index) === String(index) && (r.kind === kind || (kind === 'sound' && r.kind === 'game')));
+  }
+  /* 练习记录展示：同一「课时 x 练习类型」只保留最新一条（旧存档无评分按 3 星），时间倒序 */
+  function recordList(module, index) {
+    const latest = {};
+    s.practiceRecords.forEach(r => {
+      const k = r.module + '|' + r.index + '|' + r.kind;
+      if (!latest[k] || String(r.completedAt) > String(latest[k].completedAt)) latest[k] = r;
+    });
+    let list = Object.values(latest);
+    if (module !== undefined) list = list.filter(r => r.module === module && String(r.index) === String(index));
+    return list.sort((a, b) => String(b.completedAt).localeCompare(String(a.completedAt)));
   }
   const keyOf = (module, index) => module + '-' + index;
 
@@ -139,12 +177,14 @@ const Store = (() => {
   function reset() { s = defaultState(); unlockQueue = []; save(); }
 
   return {
+    SAVE_PREFIX,
     get state() { return s; },
-    save, addStars, addPoints, spendStars, spendPoints,
+    get user() { return user; },
+    use, save, addStars, addPoints, spendStars, spendPoints,
     initUnlockQueue, checkUnlock, popUnlock, peekUnlock, unlockCount,
     petLevel, petAff, isUnlocked, addFood, foodCount, takeFood, addAffection,
     skinOwned, buySkin, equipSkin, curSkin,
-    isCompleted, markCompleted, recordPractice, practiceDone, keyOf,
+    isCompleted, markCompleted, recordPractice, practiceDone, recordList, keyOf,
     tick, stats, dailyCount, exportCode, importCode, reset,
   };
 })();

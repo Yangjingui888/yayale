@@ -1,4 +1,4 @@
-/* ============ 应用入口：五页哈希路由 + HUD + 学习计时 + demo 防沉迷 ============ */
+/* ============ 应用入口：登录门 + 六页哈希路由 + HUD + 学习计时 + demo 防沉迷 ============ */
 const APP = (() => {
   const routes = {
     home:   ['home',   'Pages.home'],
@@ -6,20 +6,27 @@ const APP = (() => {
     pets:   ['pets',   'Pages.pets'],
     pet:    ['pet',    'Pages.pet'],
     parent: ['parent', 'Pages.parent'],
+    me:     ['me',     'Pages.me'],
   };
   /* 旧地址重定向（书签兼容） */
   const LEGACY = { letters: '#/learn/letters', words: '#/learn/words', pinyin: '#/learn/pinyin', hanzi: '#/learn/hanzi', flow: '#/home' };
   let locked = false;
+  let started = false;        // 登录成功后的应用主体（计时器等只启一次）
+  let timerOn = false;
 
   function curHash() { return location.hash || '#/home'; }
 
   /* ---------- 顶栏返回与底部导航高亮 ---------- */
-  const TAB_OF = { home: 'study', learn: 'study', pets: 'pets', pet: 'pets', parent: 'parent' };
+  const TAB_OF = { home: 'study', learn: 'study', pets: 'pets', pet: 'pets', parent: 'parent', me: '' };
   function hud() {
+    if (!started) return;
     document.querySelector('#hudStars b').textContent = Store.state.stars;
     document.querySelector('#hudPoints b').textContent = Store.state.points;
+    const acc = Auth.get();
+    const meBtn = document.getElementById('hudMe');
+    if (meBtn && acc) meBtn.textContent = acc.avatar;
     const h = curHash();
-    const showBack = !/^#\/home\/?$/.test(h) && h !== '#/' && h !== '';
+    const showBack = !/^#\/home\/?$/.test(h) && h !== '#/' && h !== '' && !/^#\/me\/?$/.test(h);
     document.getElementById('hudBack').hidden = !showBack;
     const name = (h.replace(/^#\/?\//, '') || 'home').split('/')[0];
     const tab = TAB_OF[name] || 'study';
@@ -39,14 +46,27 @@ const APP = (() => {
       const go = { study: '#/home', pets: '#/pets', parent: '#/parent' }[b.dataset.tab];
       if (location.hash === go) route(); else location.hash = go;
     });
+    document.getElementById('hudMe').onclick = () => { UI.sfx.tap(); location.hash = '#/me'; };
   }
 
   function route() {
     const hash = location.hash.replace(/^#\/?/, '') || 'home';
     const [name, ...rest] = hash.split('/');
+    const el = document.getElementById('view');
+    /* 登录门：未登录只渲染登录页 */
+    if (!started) {
+      if (name !== 'login') { location.hash = '#/login'; return; }
+      el.dataset.page = 'login';
+      TTS.stop();
+      el.innerHTML = '';
+      window.scrollTo(0, 0);
+      Pages.login(el);
+      return;
+    }
+    if (name === 'login') { location.hash = '#/home'; return; }
     if (LEGACY[name]) { location.hash = LEGACY[name]; return; }
     const r = routes[name] || routes.home;
-    const el = document.getElementById('view');
+    el.dataset.page = r[0];
     TTS.stop();
     el.innerHTML = '';
     el.scrollTop = 0;
@@ -57,16 +77,21 @@ const APP = (() => {
   }
   addEventListener('hashchange', route);
 
-  /* ---------- 学习计时 + demo 防沉迷（sessionStart 起算，切后台暂停） ---------- */
+  /* ---------- 学习计时 + demo 防沉迷（登录成功后才启动） ---------- */
   let sessionStart = Date.now();
   window.sessionSecReset = () => { sessionStart = Date.now(); locked = false; };
-  setInterval(() => {
-    if (locked) return;
-    if (document.hidden) { sessionStart += 5000; return; }   // 离开页面暂停计时
-    Store.tick(5);
-    const lim = Store.state.timer;
-    if (lim && Date.now() - sessionStart >= lim * 60000) showLock();
-  }, 5000);
+  function startTimer() {
+    if (timerOn) return;
+    timerOn = true;
+    sessionStart = Date.now();
+    setInterval(() => {
+      if (locked) return;
+      if (document.hidden) { sessionStart += 5000; return; }   // 离开页面暂停计时
+      Store.tick(5);
+      const lim = Store.state.timer;
+      if (lim && Date.now() - sessionStart >= lim * 60000) showLock();
+    }, 5000);
+  }
 
   function showLock() {
     locked = true; TTS.stop();
@@ -88,18 +113,38 @@ const APP = (() => {
     };
   }
 
+  /* ---------- 登录成功：装载该账号存档并进入应用 ---------- */
+  function enter(username) {
+    Store.use(username);
+    started = true;
+    document.body.classList.remove('logged-out');
+    applyMotion();
+    Store.initUnlockQueue();          // 补算离线期间达标的解锁（庆祝弹窗稍后展示）
+    bindChrome();
+    startTimer();
+    if (!routes[(location.hash.replace(/^#\/?/, '') || 'home').split('/')[0]] || /^#\/?login/.test(location.hash)) location.hash = '#/home';
+    route();
+  }
+
+  /* ---------- 退出登录：清会话并回到登录页 ---------- */
+  function logout() {
+    Auth.logout();
+    location.reload();
+  }
+
   /* ---------- 首次触摸解锁 WebAudio / 语音 ---- */
   addEventListener('pointerdown', function once() {
     UI.sfx.tap(); removeEventListener('pointerdown', once);
   }, { passive: true });
 
-  function boot() {
-    applyMotion();
-    Store.initUnlockQueue();          // 补算离线期间达标的解锁（庆祝弹窗稍后展示）
-    bindChrome();
-    if (!location.hash || location.hash === '#' || location.hash === '#/') location.hash = '#/home';
-    route();
+  async function boot() {
+    await Auth.ensureAdmin();
+    const user = Auth.current();
+    if (user) { enter(user); return; }
+    document.body.classList.add('logged-out');
+    if (location.hash === '#/login' || !location.hash || location.hash === '#') { location.hash = '#/login'; route(); }
+    else location.hash = '#/login';   // hashchange 触发 route → 登录页
   }
-  return { boot, hud };
+  return { boot, enter, logout, hud };
 })();
 APP.boot();

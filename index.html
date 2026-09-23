@@ -8,7 +8,7 @@
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌱</text></svg>" />
 <link rel="stylesheet" href="css/style.css" />
 </head>
-<body>
+<body class="logged-out">
 <div class="app">
   <!-- 顶部品牌栏 + 双货币 -->
   <header id="hud" class="hud">
@@ -22,6 +22,7 @@
     <div class="coinbar">
       <span class="coin" id="hudStars" title="星星：兑换宠物皮肤"><i>⭐</i><b>0</b></span>
       <span class="coin" id="hudPoints" title="积分：解锁宠物、购买食物"><i>🟡</i><b>0</b></span>
+      <button class="hud-me" id="hudMe" title="个人中心" aria-label="个人中心">👤</button>
     </div>
   </header>
 
@@ -43,6 +44,7 @@
 
 <script src="js/data.js"></script>
 <script src="js/store.js"></script>
+<script src="js/auth.js"></script>
 <script src="js/tts.js"></script>
 <script src="js/ui.js"></script>
 <script src="js/components.js"></script>

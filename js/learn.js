@@ -81,11 +81,35 @@ const Learn = (() => {
   let sheet = null;          // { el, close }
   let micCleanup = null;     // 离开时释放麦克风/识别
 
+  /* 跟读判分：文本归一化 + 最长公共子序列相似度 */
+  function normText(t) { return String(t || '').toLowerCase().replace(/[^a-z0-9\u4e00-\u9fa5]+/g, ' ').trim(); }
+  function similarity(a, b) {
+    const m = a.length, n = b.length;
+    if (!m || !n) return 0;
+    let prev = new Array(n + 1).fill(0);
+    for (let i = 1; i <= m; i++) {
+      const cur = [0];
+      for (let j = 1; j <= n; j++) cur[j] = a[i - 1] === b[j - 1] ? prev[j - 1] + 1 : Math.max(prev[j], cur[j - 1]);
+      prev = cur;
+    }
+    return (2 * prev[n]) / (m + n);
+  }
+  function scoreFollow(heard, target) {
+    const h = normText(heard), t = normText(target);
+    if (!h) return 2;
+    if (t && (h.includes(t) || t.includes(h))) return 3;
+    const hw = h.split(' '), tw = t.split(' ');
+    if (tw.length > 1 && hw.length > 1 && tw.some(w => hw.includes(w))) return 3;
+    return similarity(h, t) >= 0.5 ? 3 : 2;
+  }
+
   const MODULE_NAME = { letters: '字母', words: '单词', pinyin: '拼音', hanzi: '汉字' };
+  let clipUrl = null;        // 最近一次跟读录音（仅当次弹层会话内可回听）
 
   function closeSheet() {
     TTS.stop();
     if (micCleanup) { micCleanup(); micCleanup = null; }
+    if (clipUrl) { URL.revokeObjectURL(clipUrl); clipUrl = null; }   // 释放跟读录音回听链接
     if (sheet) sheet.close();
   }
 
@@ -128,6 +152,7 @@ const Learn = (() => {
     if (nav) nav.innerHTML = navHtml('');
     const body = document.getElementById('practiceBody');
     if (!body) return;
+    const recs = Store.recordList(module, index);
     body.innerHTML = `
       <div class="study-card">
         <div class="study-visual">${item.visual}</div>
@@ -140,12 +165,15 @@ const Learn = (() => {
         return `<button class="action-btn${done ? ' practice-done' : ''}" data-kind="${p.kind}">
           <span class="ab-ico">${p.icon}</span><span class="ab-label">${p.label}</span>
           <small>${done ? '已完成 ✓' : '点我开始'}</small></button>`;
-      }).join('')}</div>`;
+      }).join('')}</div>
+      ${recs.length ? `<button class="rec-toggle" id="recToggle">📒 本课练习记录（${recs.length}）</button><div class="rec-list" id="recList" hidden>${recs.map(r => recRowHtml(r)).join('')}</div>` : ''}`;
     body.parentElement.querySelectorAll('.action-grid [data-kind]').forEach(b => {
       b.onclick = () => { UI.sfx.tap(); startPractice(b.dataset.kind); };
     });
     bindNav(body);
     document.getElementById('studyPlay').onclick = () => { UI.sfx.pop(); TTS.speak(item.play); };
+    const recToggle = body.querySelector('#recToggle');
+    if (recToggle) recToggle.onclick = () => { UI.sfx.tap(); const rl = body.querySelector('#recList'); rl.hidden = !rl.hidden; };
     setTimeout(() => TTS.speak(item.play), 500);
   }
 
@@ -175,6 +203,7 @@ const Learn = (() => {
       ? '<div class="study-card"><div class="study-word">✍️ 描红练习</div><div class="study-sub">这个已经练过啦，再描一遍也很棒！</div></div>'
       : '<div class="study-card"><div class="study-word">✍️ 描红练习</div><div class="study-sub">沿着浅色字形慢慢描，画完就算完成</div></div>';
     practiceShell('trace', againHint + '<div id="traceHost"></div>');
+    const scores = [];
     (function paint(k) {
       const host = document.getElementById('traceHost');
       host.innerHTML = '';
@@ -183,14 +212,15 @@ const Learn = (() => {
       head.className = 'trace-head';
       head.textContent = item.trace.length > 1 ? `描一描（${k + 1} / ${item.trace.length}）：${ch}` : `描一描：${ch}`;
       host.appendChild(head);
-      host.appendChild(TracePad(ch, () => {
+      host.appendChild(TracePad(ch, (score) => {
+        scores.push(score);
         if (k + 1 < item.trace.length) paint(k + 1);
-        else finishPractice('trace', '描得真棒！可以继续选择下一个练习环节');
+        else finishPractice('trace', '描得真棒！可以继续选择下一个练习环节', Math.round(scores.reduce((a, b) => a + b, 0) / scores.length));
       }));
     })(0);
   }
 
-  /* ----- AI 跟读：语音识别优先，音量兜底，开口即过（demo 流程） ----- */
+  /* ----- AI 跟读：识别评分 + MediaRecorder 当场回听，开口即过 ----- */
   function openFollow() {
     const item = current.item;
     const body = practiceShell('follow', `
@@ -201,6 +231,7 @@ const Learn = (() => {
         <button class="mic" id="micBtn" aria-label="开始录音跟读">🎤</button>
         <div class="meter"><i id="meterBar"></i></div>
         <div class="follow-result tip" id="followResult">点击话筒开始跟读</div>
+        <div id="clipHost"></div>
         <div style="margin-top:12px"><button class="primary ghost" id="followSkip">麦克风不方便？我读过啦</button></div>
       </div>`);
     const micBtn = body.querySelector('#micBtn');
@@ -208,11 +239,15 @@ const Learn = (() => {
     const result = body.querySelector('#followResult');
     const speakDemo = () => { UI.sfx.pop(); TTS.speak(item.play); };
     body.querySelector('#followPlay').onclick = speakDemo;
-    body.querySelector('#followSkip').onclick = () => finishPractice('follow', '读得真棒！可以继续选择下一个练习环节');
+    body.querySelector('#followSkip').onclick = () => finishPractice('follow', '读得真棒！可以继续选择下一个练习环节', 1);
     setTimeout(speakDemo, 400);
 
-    let listening = false, stopFn = null, resolved = false;
-    micCleanup = () => { listening = false; if (stopFn) { stopFn(); stopFn = null; } };
+    const clipHost = body.querySelector('#clipHost');
+    let listening = false, abortParts = [], resolved = false;
+    let recorder = null, chunks = [], recT0 = 0;
+    function releaseStream() { abortParts.forEach(f => { try { f(); } catch (e) {} }); abortParts = []; }
+    micCleanup = () => { listening = false; releaseStream(); };
+    function dropClip() { if (clipUrl) { URL.revokeObjectURL(clipUrl); clipUrl = null; } if (clipHost) clipHost.innerHTML = ''; }
 
     micBtn.onclick = async () => {
       if (listening) { micCleanup(); micBtn.classList.remove('listening'); micBtn.textContent = '🎤'; result.textContent = '点击话筒开始跟读'; return; }
@@ -220,6 +255,27 @@ const Learn = (() => {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         listening = true; resolved = false;
+        dropClip();
+        if (window.MediaRecorder) {
+          try {
+            chunks = [];
+            recorder = new MediaRecorder(stream);
+            recorder.ondataavailable = (ev) => { if (ev.data && ev.data.size) chunks.push(ev.data); };
+            recorder.onstop = () => {
+              if (recorder.mimeType.includes('webm') && chunks.length) {
+                const blob = new Blob(chunks, { type: recorder.mimeType });
+                if (blob.size > 2000) {
+                  clipUrl = URL.createObjectURL(blob);
+                  if (clipHost.isConnected) clipHost.innerHTML = `<div class="clip-box"><span>🎧 听一听我读的</span><audio class="clip-audio" controls src="${clipUrl}"></audio></div>`;
+                }
+              }
+            };
+            recorder.start();
+            recT0 = Date.now();
+            abortParts.push(() => { try { if (recorder.state !== 'inactive') recorder.stop(); } catch (e) {} });
+          } catch (e) { recorder = null; }
+        }
+        abortParts.push(() => stream.getTracks().forEach(t => t.stop()));
         micBtn.classList.add('listening'); micBtn.textContent = '👂';
         result.textContent = '正在听…大声读出来吧！';
         startRecognition(stream) || startVolumeMonitor(stream);
@@ -228,22 +284,23 @@ const Learn = (() => {
       }
     };
 
-    function doneFollow(msg) {
+    function doneFollow(msg, score) {
       if (resolved) return;
       resolved = true;
+      if (recorder && recorder.state !== 'inactive') { try { recorder.stop(); } catch (e) {} }
       micCleanup();
       micBtn.classList.remove('listening'); micBtn.textContent = '🎤';
       meter.style.width = '0%';
       result.textContent = msg;
-      finishPractice('follow', '读得真棒！可以继续选择下一个练习环节');
+      finishPractice('follow', '读得真棒！可以继续选择下一个练习环节', score);
     }
 
-    /* 优先：SpeechRecognition，听到内容即算成功（demo hearing 即过） */
+    /* 优先：SpeechRecognition，按识别文本与目标匹配度评 2~3 星 */
     function startRecognition(stream) {
       const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-      if (!SR) { stream.getTracks().forEach(t => t.stop()); return null; }
+      if (!SR) return null;
       let rec;
-      try { rec = new SR(); } catch (e) { stream.getTracks().forEach(t => t.stop()); return null; }
+      try { rec = new SR(); } catch (e) { return null; }
       let fellBack = false;
       rec.lang = item.follow.lang;
       rec.interimResults = true;
@@ -256,35 +313,38 @@ const Learn = (() => {
       };
       rec.onresult = (ev) => {
         const t = Array.from(ev.results).map(r => r[0].transcript).join('').trim();
-        if (t) doneFollow('听到了！你说得很棒 ✨');
+        if (!t) return;
+        if (!ev.results[ev.results.length - 1].isFinal) return;
+        const sc = scoreFollow(t, item.follow.target);
+        doneFollow(sc === 3 ? '听得清清楚楚，说得标准又流利 ✨' : '听到了！再贴近示范一点会更棒哦', sc);
       };
       rec.onerror = (ev) => { if (ev.error !== 'aborted' && listening) fallback(); };
-      stopFn = () => { try { rec.abort(); } catch (e) {} };
+      abortParts.push(() => { try { rec.abort(); } catch (e) {} });
       try { rec.start(); } catch (e) { return null; }
       /* 6.5s 未识别到 → 音量兜底 */
       setTimeout(fallback, 6500);
       return true;
     }
 
-    /* 兜底：音量检测，开口即过（demo monitorFollowAudio） */
+    /* 兜底：音量检测，开口即过 → 2 星 */
     function startVolumeMonitor(stream) {
       if (resolved) return;
       const AC = window.AudioContext || window.webkitAudioContext;
       const ac = new AC();
-      const src = ac.createMediaStreamSource(stream);
+      const srcNode = ac.createMediaStreamSource(stream);
       const ana = ac.createAnalyser(); ana.fftSize = 512;
-      src.connect(ana);
+      srcNode.connect(ana);
       const buf = new Uint8Array(ana.frequencyBinCount);
       let rafId = null; const t0 = Date.now();
-      const prevStop = stopFn;
-      stopFn = () => { listening = false; if (rafId) cancelAnimationFrame(rafId); try { ac.close(); } catch (e) {} if (prevStop) prevStop(); stream.getTracks().forEach(t => t.stop()); };
+      abortParts.push(() => { if (rafId) cancelAnimationFrame(rafId); try { ac.close(); } catch (e) {} });
       (function vol() {
         if (!listening || resolved) return;
+        if (recorder && recorder.state === 'recording' && Date.now() - recT0 > 15000) { try { recorder.stop(); } catch (e) {} }
         ana.getByteTimeDomainData(buf);
         let peak = 0;
         for (let i = 0; i < buf.length; i++) peak = Math.max(peak, Math.abs(buf[i] - 128));
         meter.style.width = Math.min(100, peak * 1.6) + '%';
-        if (peak > 26) { doneFollow('听到了！你的声音真有精神 ✨'); return; }
+        if (peak > 26) { doneFollow('听到了！你的声音真有精神 ✨', 2); return; }
         if (Date.now() - t0 > 8000) {
           micCleanup();
           micBtn.classList.remove('listening'); micBtn.textContent = '🎤';
@@ -298,6 +358,7 @@ const Learn = (() => {
 
   /* ----- 小游戏：听音识图 / 图文配对（3 选项，答对即发奖） ----- */
   function openGame(kind) {
+    let miss = 0;
     const { module, index, item } = current;
     const list = LESSONS(module);
     const pos = list.indexOf(item);
@@ -326,7 +387,7 @@ const Learn = (() => {
       b.innerHTML = kind === 'sound'
         ? `<span class="quiz-picture sm">${o.it.quizVisual}</span><span class="quiz-label">${o.it.quizSub}</span>`
         : `<span class="quiz-word-opt">${o.it.quizLabel}</span>`;
-      b.onclick = () => answerGame(b, o.ok, kind);
+      b.onclick = () => answerGame(b, o.ok, kind, () => miss++, () => miss);
       optsEl.appendChild(b);
     });
     if (kind === 'sound') {
@@ -335,12 +396,14 @@ const Learn = (() => {
       setTimeout(play, 400);
     }
   }
-  function answerGame(btn, ok, kind) {
+  function answerGame(btn, ok, kind, bumpMiss, peekMiss) {
     if (btn.classList.contains('correct')) return;
     if (ok) {
       btn.classList.add('correct'); UI.sfx.right();
-      finishPractice(kind, '答对啦！可以继续选择下一个练习环节');
+      const m = peekMiss();
+      finishPractice(kind, '答对啦！可以继续选择下一个练习环节', m === 0 ? 3 : m === 1 ? 2 : 1);
     } else {
+      bumpMiss();
       btn.classList.add('wrong'); UI.sfx.wrong();
       UI.toast('再听一次，慢慢想一想');
       setTimeout(() => btn.classList.remove('wrong'), 550);
@@ -348,19 +411,24 @@ const Learn = (() => {
   }
 
   /* ----- 完成一个练习：即时发奖（无结算页）+ 打勾 + 解锁检查 ----- */
-  function finishPractice(kind, msg) {
+  function finishPractice(kind, msg, score) {
     const { module, index, item } = current;
+    const sc = Math.min(3, Math.max(1, score || 3));
+    const pct = [0.4, 0.7, 1][sc - 1];
     const again = Store.practiceDone(module, index, kind);
     const rw = again ? ECON.rewards[module].again : ECON.rewards[module].first;
-    Store.recordPractice(module, index, kind, item.title, rw.p);
-    Store.addPoints(rw.p); Store.addStars(rw.s);
+    const pt = Math.max(4, Math.round(rw.p * pct));
+    const st = rw.s ? Math.max(1, Math.round(rw.s * pct)) : 0;
+    Store.recordPractice(module, index, kind, item.title, pt, sc);
+    Store.addPoints(pt); Store.addStars(st);
     Store.state.minutes++;
     if (PRACTICES.every(p => Store.practiceDone(module, index, p.kind))) {
       Store.markCompleted(Store.keyOf(module, index));
     }
     Store.save();
     UI.sfx.star(); UI.burst(again ? 40 : 80);
-    UI.toast(msg + `（🟡+${rw.p}${rw.s ? ' ⭐+' + rw.s : ''}）`);
+    const starTxt = '★'.repeat(sc) + '☆'.repeat(3 - sc);
+    UI.toast(msg + ` ${starTxt}（${st ? '⭐+' + st + ' ' : ''}🟡+${pt}）`);
     TTS.speak({ text: msg, lang: 'zh-CN' });
     setTimeout(() => renderStudy(), 900);
     setTimeout(() => UI.checkUnlockCelebration(), 1000);
