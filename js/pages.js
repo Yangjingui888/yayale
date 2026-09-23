@@ -1,4 +1,4 @@
-/* ============ 芽芽乐 · 页面渲染（demo 视觉 + 现有玩法与路由） ============ */
+/* ============ 芽芽乐 · 五页路由（demo 模型：home / learn / pets / detail / parent，练习走底部弹层） ============ */
 const Pages = {};
 
 /* 打开底部弹层并自动绑定右上角关闭按钮 */
@@ -15,325 +15,264 @@ function greet() {
   return h < 12 ? '早上好' : h < 18 ? '下午好' : '晚上好';
 }
 
+/* 皮肤图（成品 webp + emoji 兜底，demo skinVisual 结构） */
+function skinVisual(pet, skinId) {
+  return `<span class="wear-stack"><img class="pet-photo" src="${skinImg(pet.L, skinId)}" alt="${pet.name} · ${skinId}" onerror="skinImgFail(this)"><span class="skin-fallback">${pet.em}</span></span>`;
+}
+function skinLabel(id) { const s = SKIN_CATALOG.find(x => x[0] === id); return s ? s[1] : '自然森林'; }
+
+/* qsave 时刷新学习页打勾状态（仅当学习页在屏） */
+let learnRefresh = null;
+window.addEventListener('qsave', () => {
+  const host = document.getElementById('lessonList');
+  if (host && host.isConnected && learnRefresh) learnRefresh();
+});
+
 /* ---------- ① 首页 ---------- */
 Pages.home = (el) => {
   const s = Store.state;
-  const petN = s.petsUnlocked;
-  const curPet = petN > 0 ? PETS[petN - 1] : null;
-  const nextPet = petN < 26 ? PETS[petN] : null;
-  const need = nextPet ? ECON.unlockAt(petN) : 0;
+  const n = Store.unlockCount();
+  const pi = Math.min(n, 25);
+  const nextPet = n < 26 ? PETS[n] : null;
+  const need = nextPet ? ECON.unlockAt(n) : 0;
   const gap = nextPet ? Math.max(0, need - s.lifetimePoints) : 0;
-  const d = new Date();
-  const tstr = d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate();
-  const doneMap = (s.daily && s.daily.date === tstr) ? s.daily.done : {};
-  const doneN = Store.dailyCount();
-
-  /* 继续学习：优先跳到下一个未通关字母 */
-  const keys = LETTERS.map(a => a.L);
-  const fu = firstUncleared('letters', keys);
-  const goNext = fu < LETTERS.length ? `#/flow/letter/${fu}` : '#/letters';
+  const teaserPet = PETS[pi];
+  const done = Math.min(4, s.completed.length);
 
   el.innerHTML = `
     <div class="hero">
       <h1>${greet()}，<br>小小探险家！</h1>
-      <p>今天也一起来学字母、喂宠物吧 🌈</p>
+      <p>今天也来认识一个新朋友吧</p>
       <div class="hero-row">
-        <button class="hero-btn" data-go="${goNext}">▶ 继续学习</button>
-        <span class="hero-pet">${curPet ? curPet.em : '🥚'}</span>
+        <button class="hero-btn" data-go="#/learn/letters">继续学习 <span>→</span></button>
+        <span class="hero-pet">${skinVisual(teaserPet, Store.curSkin(pi))}</span>
       </div>
     </div>
 
-    <div class="section-head"><h2>今天学什么？</h2><button id="rules">🎁 奖励规则</button></div>
+    <div class="section-head"><h2>今天学什么？</h2><button id="rules">奖励规则</button></div>
     <div class="modules">
-      <button class="module m-blue" data-go="#/letters"><b>字母乐园</b><small>26 个字母 · 拼读描红</small><span class="ico">🔤</span><em>英语</em></button>
-      <button class="module m-pink" data-go="#/words"><b>单词乐园</b><small>6 大主题 · 看图识词</small><span class="ico">🍎</span><em>英语</em></button>
-      <button class="module m-yellow" data-go="#/hanzi"><b>汉字小课堂</b><small>8 组常用字 · 识字描红</small><span class="ico">📖</span><em>汉字</em></button>
-      <button class="module m-green" data-go="#/pinyin"><b>拼音小火车</b><small>声母韵母 · 跟读闯关</small><span class="ico">🚂</span><em>拼音</em></button>
+      <button class="module m-blue" data-go="#/learn/letters"><em>英语</em><b>字母乐园</b><small>听一听 · 读一读</small><span class="ico">🔤</span></button>
+      <button class="module m-pink" data-go="#/learn/words"><em>英语</em><b>单词乐园</b><small>看图学单词</small><span class="ico">🍎</span></button>
+      <button class="module m-yellow" data-go="#/learn/hanzi"><em>汉字</em><b>汉字小课堂</b><small>描一描 · 认一认</small><span class="ico">🖌️</span></button>
+      <button class="module m-green" data-go="#/learn/pinyin"><em>拼音</em><b>拼音小火车</b><small>听音来拼读</small><span class="ico">🚂</span></button>
     </div>
 
     <div class="progress-card">
-      <div class="progress-head"><b>今日学习进度</b><span>${doneN} / 4 项</span></div>
-      <div class="bar"><i style="width:${doneN / 4 * 100}%"></i></div>
-      <div class="progress-foot">
-        <span${doneMap.letter ? ' style="color:#3c9a73;font-weight:800"' : ''}>🔤 字母</span>
-        <span${doneMap.word ? ' style="color:#3c9a73;font-weight:800"' : ''}>🍎 单词</span>
-        <span${doneMap.hanzi ? ' style="color:#3c9a73;font-weight:800"' : ''}>📖 汉字</span>
-        <span${doneMap.pinyin ? ' style="color:#3c9a73;font-weight:800"' : ''}>🚂 拼音</span>
-      </div>
+      <div class="progress-head"><b>今日学习进度</b><span>${done} / 4 项</span></div>
+      <div class="bar"><i style="width:${done * 25}%"></i></div>
+      <div class="progress-foot"><span>${done >= 4 ? '今天的学习任务完成啦，明天见！' : '完成一关，收集你的第一颗星星'}</span><span>答题有奖励</span></div>
     </div>
 
     <div class="pet-teaser">
-      <div class="pet-teaser-art">${nextPet ? nextPet.em : '🏆'}</div>
+      <div class="pet-teaser-art">${skinVisual(teaserPet, Store.curSkin(pi))}</div>
       <div class="pet-teaser-main">
-        <h3>${nextPet ? `下一位伙伴：${nextPet.name}` : '26 位伙伴全部到家啦！'}</h3>
-        <p>${nextPet ? `再攒 <b>${gap}</b> 积分（累计 ${need}）就能见面，累计积分不清零哦` : '快去小屋看看它们的星级装扮吧'}</p>
+        <h3>小伙伴在宠物小屋等你</h3>
+        <p>${n >= 26 ? '26 位小伙伴都已到齐！' : `再攒 ${gap} 积分，解锁 ${teaserPet.L} · ${teaserPet.name}`}</p>
       </div>
-      <button class="pill-btn" data-go="#/pets">${petN}/26 去小屋</button>
+      <button class="pill-btn" data-go="#/pets">${n}/26 去看看</button>
     </div>`;
 
   el.querySelectorAll('[data-go]').forEach(b => b.onclick = () => { UI.sfx.tap(); location.hash = b.dataset.go; });
   el.querySelector('#rules').onclick = () => {
     UI.sfx.tap();
     openSheet(`
-      <div class="sheet-head"><h3>🎁 奖励规则</h3><button class="close" data-x="hide">✕</button></div>
-      <p>学习有奖励 · 只鼓励 · 不惩罚</p>
-      <div class="rule">${RULES.map(r => `<div class="rule-row"><span>${r[0]}</span><b>${r[1]}</b></div>`).join('')}</div>`);
+      <div class="sheet-head"><h3>芽芽乐奖励规则</h3><button class="close" data-x="hide">×</button></div>
+      <div class="rule">${RULES.map(r => `<div class="rule-row"><span>${r[0]}</span><b>${r[1]}</b></div>`).join('')}</div>
+      <p class="study-sub" style="margin-top:10px">学习有奖励 · 只鼓励 · 不惩罚</p>`);
   };
-  setTimeout(() => TTS.speak({ text: `${greet()}！欢迎来到芽芽乐中英双语启蒙小屋！`, lang: 'zh-CN' }), 600);
 };
 
-/* ---------- ② 模块列表页通用：demo lesson 行列表 + 圆片筛选 ---------- */
-function firstUncleared(mapName, keys) {
-  for (let i = 0; i < keys.length; i++) if (!Store.cleared(mapName, keys[i])) return i;
-  return keys.length;
-}
+/* ---------- ② 学习页（模块四 tab + 筛选 + 课时列表） ---------- */
+const LEARN_META = {
+  letters: { title: '字母乐园', sub: '跟着小伙伴，一起开口读 · 26 个字母', emoji: '🦊', grad: 'g-blue', filters: ['A-Z', '已学', '待学习'] },
+  words:   { title: '单词乐园', sub: '看图识词 · 6 大主题', emoji: '🍎', grad: 'g-pink', filters: null },
+  hanzi:   { title: '汉字小课堂', sub: '描一描 · 认一认 · 8 组常用字', emoji: '🖌️', grad: 'g-yellow', filters: null },
+  pinyin:  { title: '拼音小火车', sub: '听音来拼读 · 声母韵母', emoji: '🚂', grad: 'g-green', filters: null },
+};
 
-/* rows: [{ icon, name, sub, state:'done|cur|next|lock', key }] */
-function lessonPage(el, { title, sub, emoji, grad, filters, getRows, onOpen }) {
-  let fi = filters ? 0 : -1;
+Pages.learn = (el, module) => {
+  if (!LEARN_META[module]) return location.hash = '#/home';
+  const meta = LEARN_META[module];
+  const filters = meta.filters || ['全部'].concat(
+    module === 'words' ? WORD_THEMES.map(t => t.name) :
+    module === 'pinyin' ? PINYIN_GROUPS.map(g => g.name) : HANZI_GROUPS.map(g => g.name));
+  let fi = 0;
   el.innerHTML = `
     <div class="sub-top back-row"><button class="back" id="pgBack">‹</button>
-      <div><h1>${title}</h1><small>${sub}</small></div></div>
-    <div class="learn-hero ${grad}"><h2>${title}</h2><p>${sub}</p><div class="learn-hero-art">${emoji}</div></div>
-    ${filters ? '<div class="lesson-filter" id="flt"></div>' : ''}
-    <div class="lesson-list" id="lst"></div>`;
+      <div><h1>${meta.title}</h1><small>${meta.sub}</small></div></div>
+    <div class="learn-hero ${meta.grad}"><h2>${meta.title}</h2><p>发音认知 → 描红练习 → AI跟读 → 小游戏闯关</p><div class="learn-hero-art">${meta.emoji}</div></div>
+    <div class="learn-tabs" id="learnTabs">
+      <button class="active" data-tab="learn">学习</button>
+      <button data-tab="trace">描红</button>
+      <button data-tab="follow">AI跟读</button>
+      <button data-tab="game">小游戏</button>
+    </div>
+    <div class="lesson-filter" id="flt"></div>
+    <div class="lesson-list" id="lessonList"></div>
+    <button class="play-row" id="modPlay" style="width:100%;margin-top:12px"><span>🔊 点我听当前模块标准发音</span><span class="rp">播放声音</span></button>`;
   el.querySelector('#pgBack').onclick = () => { TTS.stop(); location.hash = '#/home'; };
 
-  const list = el.querySelector('#lst');
+  /* 当前课时：第一个未整体完成的行 */
+  const list = Learn.LESSONS(module);
+  const curIdx = () => { const k = list.findIndex(x => !lessonDone(module, x.id)); return k < 0 ? 0 : k; };
+
+  function categoryOf(x) {
+    if (module === 'words') return WORD_THEMES[+String(x.id).split('_')[0]].name;
+    if (module === 'pinyin') return PINYIN_GROUPS[+String(x.id).split('_')[0]].name;
+    if (module === 'hanzi') return HANZI_GROUPS[+String(x.id).split('_')[0]].name;
+    return '';
+  }
+  function rowVisible(x) {
+    if (fi === 0) return true;
+    if (module === 'letters') {
+      const doneRow = lessonDone(module, x.id);
+      return filters[fi] === '已学' ? doneRow : !doneRow;
+    }
+    return categoryOf(x) === filters[fi];
+  }
+
+  const flt = el.querySelector('#flt'), lst = el.querySelector('#lessonList');
   function paintFilter() {
-    if (!filters) return;
-    const f = el.querySelector('#flt');
-    f.innerHTML = filters.map((n, k) => `<button class="${k === fi ? 'active' : ''}" data-f="${k}">${n}</button>`).join('');
-    f.querySelectorAll('button').forEach(b => b.onclick = () => { fi = +b.dataset.f; UI.sfx.tap(); paintFilter(); paintList(); });
+    flt.innerHTML = filters.map((n, k) => `<button class="${k === fi ? 'active' : ''}" data-f="${k}">${n}</button>`).join('');
+    flt.querySelectorAll('button').forEach(b => b.onclick = () => { fi = +b.dataset.f; UI.sfx.tap(); paintFilter(); paintList(); });
   }
   function paintList() {
-    const rows = getRows(fi);
-    list.innerHTML = '';
-    rows.forEach(r => {
-      const b = document.createElement('button');
-      b.className = 'lesson';
-      b.innerHTML = `
-        <span class="lesson-icon">${r.icon}</span>
-        <span class="lesson-main"><b>${r.name}</b><small>${r.sub}</small></span>
-        <span class="act ${r.state === 'done' ? 'done' : r.state === 'lock' ? 'lock' : ''}">${
-          r.state === 'done' ? '再练' : r.state === 'lock' ? '🔒' : r.state === 'next' ? '开始' : '学习'}</span>`;
-      b.onclick = () => {
-        if (r.state === 'lock') {
-          UI.sfx.wrong(); UI.toast('先完成前面的关卡吧～');
-          TTS.speak({ text: '我们先完成前面的关卡吧', lang: 'zh-CN' }); return;
-        }
-        UI.sfx.pop(); onOpen(r);
-      };
-      list.appendChild(b);
+    lst.innerHTML = '';
+    list.forEach(x => {
+      if (!rowVisible(x)) return;
+      const done = lessonDone(module, x.id);
+      const row = document.createElement('div');
+      row.className = 'lesson';
+      row.innerHTML = `
+        <div class="lesson-icon">${module === 'letters' ? x.title.replace('字母 ', '') : x.quizVisual}</div>
+        <div class="lesson-main"><b>${x.title}</b><small>${x.sub} · ${done ? '已完成，可无限复习' : '点击开始学习'}</small></div>
+        <button class="${done ? 'done' : ''}">${done ? '✓ 再练' : '开始'}</button>`;
+      row.querySelector('button').onclick = () => { UI.sfx.pop(); Learn.openStudy(module, x.id); };
+      lst.appendChild(row);
     });
+    if (!lst.children.length) lst.innerHTML = '<p class="study-sub" style="text-align:center;padding:18px">这一类全都练过啦，真棒！换个分类看看吧</p>';
   }
+  learnRefresh = () => { paintList(); };
+
+  /* 四 tab：非「学习」直接打开当前课时对应练习弹层 */
+  el.querySelectorAll('#learnTabs button').forEach(b => b.onclick = () => {
+    UI.sfx.tap();
+    el.querySelectorAll('#learnTabs button').forEach(x => x.classList.toggle('active', x === b));
+    const x = list[curIdx()];
+    if (b.dataset.tab === 'learn') return;
+    Learn.openStudy(module, x.id);
+    if (b.dataset.tab !== 'learn') Learn.startPractice(b.dataset.tab === 'game' ? 'sound' : b.dataset.tab);
+  });
+
+  el.querySelector('#modPlay').onclick = () => { UI.sfx.pop(); TTS.speak(list[curIdx()].play); };
   paintFilter(); paintList();
-}
-
-/* ---------- 字母乐园（A→Z 顺序解锁） ---------- */
-Pages.letters = (el) => {
-  const keys = LETTERS.map(a => a.L);
-  const fu = firstUncleared('letters', keys);
-  lessonPage(el, {
-    title: '🔤 字母乐园', sub: 'A→Z 顺序解锁 · 每关 2 个好朋友单词', emoji: '🔤', grad: 'linear-gradient(135deg,#dcf1ff,#e8ecff)',
-    getRows: () => LETTERS.map((a, ii) => ({
-      icon: a.L, name: `字母 ${a.L} ${a.L.toLowerCase()}`,
-      sub: `${a.L} says /${a.ph}/ · ${a.words[0][0]} ${a.words[1][0]}`,
-      state: ii < fu ? 'done' : ii === fu ? 'next' : 'lock', key: ii,
-    })),
-    onOpen: r => location.hash = `#/flow/letter/${r.key}`,
-  });
 };
 
-/* ---------- 单词乐园（主题圆片切换，主题分批开放） ---------- */
-Pages.words = (el) => {
-  const doneCount = ti => WORD_THEMES[ti].words.filter((_, wi) => Store.cleared('words', `${ti}_${wi}`)).length;
-  lessonPage(el, {
-    title: '🍎 单词乐园', sub: '看图识词 · 拆分拼读 · 闯关巩固（英语产出星星⭐）', emoji: '🍎', grad: 'linear-gradient(135deg,#ffe7ea,#fff3d6)',
-    filters: WORD_THEMES.map(t => t.name),
-    getRows: (fi) => WORD_THEMES[fi].words.map((w, wi) => {
-      const themeOpen = fi === 0 || doneCount(fi - 1) >= WORD_THEMES[fi - 1].words.length;
-      return {
-        icon: w[2], name: w[0], sub: `${w[1]} · 主题「${WORD_THEMES[fi].name}」`,
-        state: !themeOpen ? 'lock' : Store.cleared('words', `${fi}_${wi}`) ? 'done' : 'cur', key: `${fi}_${wi}`,
-      };
-    }),
-    onOpen: r => location.hash = `#/flow/word/${r.key}`,
-  });
-};
-
-/* ---------- 拼音小火车（全局顺序解锁，五类圆片切换） ---------- */
-Pages.pinyin = (el) => {
-  const flat = []; PINYIN_GROUPS.forEach((g, gi) => g.items.forEach((_, ii) => flat.push(`${gi}_${ii}`)));
-  const fu = firstUncleared('pinyin', flat);
-  lessonPage(el, {
-    title: '🚂 拼音小火车', sub: '发音认知 · 口型示意 · 跟读闯关（产出积分🟡）', emoji: '🗣️', grad: 'linear-gradient(135deg,#dff6e7,#dcf1ff)',
-    filters: PINYIN_GROUPS.map(g => g.name),
-    getRows: (gi) => PINYIN_GROUPS[gi].items.map((p, ii) => {
-      let idx = 0;
-      for (let a = 0; a < gi; a++) idx += PINYIN_GROUPS[a].items.length;
-      idx += ii;
-      return {
-        icon: p[0], name: `拼音 ${p[0]}`, sub: `${p[1]} · ${p[2]}`,
-        state: idx < fu ? 'done' : idx === fu ? 'next' : 'lock', key: `${gi}_${ii}`,
-      };
-    }),
-    onOpen: r => location.hash = `#/flow/pinyin/${r.key}`,
-  });
-};
-
-/* ---------- 汉字小课堂（分组解锁，组内自由） ---------- */
-Pages.hanzi = (el) => {
-  const doneCount = gi => HANZI_GROUPS[gi].items.filter((_, ii) => Store.cleared('hanzi', `${gi}_${ii}`)).length;
-  lessonPage(el, {
-    title: '📖 汉字小课堂', sub: '看图释义 · 汉字描红 · 跟读闯关（产出积分🟡）', emoji: '📖', grad: 'linear-gradient(135deg,#fff1c8,#ffe7e8)',
-    filters: HANZI_GROUPS.map(g => g.name),
-    getRows: (gi) => HANZI_GROUPS[gi].items.map((h, ii) => {
-      const open = gi === 0 || doneCount(gi - 1) >= HANZI_GROUPS[gi - 1].items.length;
-      return {
-        icon: h[0], name: `汉字 ${h[0]}`, sub: `${h[1]} · ${h[2]}`,
-        state: !open ? 'lock' : Store.cleared('hanzi', `${gi}_${ii}`) ? 'done' : 'cur', key: `${gi}_${ii}`,
-      };
-    }),
-    onOpen: r => location.hash = `#/flow/hanzi/${r.key}`,
-  });
-};
-
-/* ---------- ③ 学习流程页（四大模块共用） ---------- */
-Pages.flow = (el, arg) => {
-  const [module, id] = arg.split('/');
-  let item;
-  try {
-    if (module === 'letter') item = letterItem(+id);
-    else if (module === 'word') { const [a, b] = id.split('_').map(Number); item = wordItem(a, b); }
-    else if (module === 'pinyin') { const [a, b] = id.split('_').map(Number); item = pinyinItem(a, b); }
-    else { const [a, b] = id.split('_').map(Number); item = hanziItem(a, b); }
-  } catch (e) { return location.hash = '#/home'; }
-  const backMap = { letter: '#/letters', word: '#/words', pinyin: '#/pinyin', hanzi: '#/hanzi' };
-  el.innerHTML = `<div class="sub-top"><div><h1 style="font-size:18px">${item.title}</h1><small>一步一步慢慢来，学完有奖励哦</small></div></div>`;
-  const box = document.createElement('div'); el.appendChild(box);
-  startLearnFlow(item, box, backMap[item.module]);
-};
-
-/* ---------- ④ 宠物小屋 ---------- */
+/* ---------- ③ 宠物小屋 ---------- */
 Pages.pets = (el) => {
   const s = Store.state;
-  const nextIdx = s.petsUnlocked;
-  const need = nextIdx < 26 ? ECON.unlockAt(nextIdx) : 0;
-  const pct = nextIdx < 26 ? Math.min(100, s.lifetimePoints / need * 100) : 100;
+  const n = Store.unlockCount();
+  const next = n < 26 ? PETS[n] : null;
+  const need = next ? ECON.unlockAt(n) : 0;
   el.innerHTML = `
-    <div class="sub-top"><div><h1>宠物小屋</h1><small>累计积分自动解锁 · 积分不清零</small></div></div>
+    <div class="sub-top back-row"><button class="back" id="pgBack">‹</button>
+      <div><h1>宠物小屋</h1><small>收集 26 位字母小伙伴</small></div></div>
     <div class="pets-wrap">
-      <div class="pet-banner">
-        <div><h2>${nextIdx ? PETS[nextIdx - 1].name : ''}在等你 🎈</h2><p>已迎接 <strong>${nextIdx}/26</strong> 位小伙伴</p></div>
-        <div class="pet-banner-art">${nextIdx ? PETS[nextIdx - 1].em : '🏡'}</div>
-      </div>
-      <div class="pet-progress">
-        <div style="display:flex;justify-content:space-between"><span>当前累计积分</span><strong>🟡 ${s.lifetimePoints}</strong></div>
-        <div class="bar"><i style="width:${pct}%"></i></div>
-        <div style="display:flex;justify-content:space-between;margin-top:7px">
-          <span>${nextIdx < 26 ? `下一位「${PETS[nextIdx].name}」需 ${need}` : '全部解锁完成！'}</span>
-          <span>⭐ ${s.stars} 可换皮肤</span></div>
-      </div>
+      <div class="pet-banner"><div><h2>我的小伙伴</h2><p>累计积分，按 A-Z 顺序解锁 · 积分不清零</p></div><div class="pet-banner-art">🏡</div></div>
+      <div class="pet-progress">${next
+        ? `<strong>${s.lifetimePoints} / ${need} 积分</strong> · 再学习一点，就能解锁 ${next.L} · ${next.name}<div class="bar"><i style="width:${Math.min(100, s.lifetimePoints / need * 100)}%"></i></div>`
+        : '<strong>26 / 26</strong> · 所有字母小伙伴都到齐啦！'}</div>
       <div class="pet-grid">
         ${PETS.map((p, i) => {
-          if (Store.isUnlocked(i)) {
-            const pd = Store.pet(i);
-            return `<button class="pet" data-i="${i}">
-              <span class="pet-art"><span class="anim">${p.em}</span></span>
-              <b>${p.name}</b><small class="plv">好感 Lv${pd.lv}${pd.skins.length > 1 ? ' 👑' : ''}</small></button>`;
-          }
-          if (i === nextIdx) {
-            const p2 = Math.min(100, s.lifetimePoints / need * 100);
-            return `<button class="pet next" data-i="${i}"><span class="lock">🔒</span>
-              <span class="pet-art">${p.em}</span><b>${p.name}</b>
-              <small>${s.lifetimePoints}/${need}</small>
-              <div class="unlock-bar"><i style="width:${p2}%"></i></div></button>`;
-          }
-          return `<div class="pet locked"><span class="lock">🔒</span>
-            <span class="pet-art">${p.em}</span><b>${p.name}</b><small>先解锁上一只</small></div>`;
+          const unlocked = i < n, prev = i === 0 || i - 1 < n;
+          const skin = Store.curSkin(i);
+          const caption = unlocked ? `好感 Lv${Store.petLevel(i)} · ${skinLabel(skin)}`
+            : prev ? `${s.lifetimePoints} / ${ECON.unlockAt(i)} 积分` : '请先解锁上一只宠物';
+          return `<button class="pet ${unlocked ? '' : 'locked'}" data-i="${i}">
+            <span class="lock">${unlocked ? '' : '🔒'}</span>
+            <span class="pet-art">${skinVisual(p, skin)}</span>
+            <b>${p.L} · ${p.name}</b><small>${caption}</small></button>`;
         }).join('')}
       </div>
     </div>`;
-  el.querySelectorAll('.pet[data-i]').forEach(b => b.onclick = () => {
+  el.querySelector('#pgBack').onclick = () => { TTS.stop(); location.hash = '#/home'; };
+  el.querySelectorAll('.pet').forEach(b => b.onclick = () => {
     const i = +b.dataset.i;
     if (Store.isUnlocked(i)) { UI.sfx.tap(); location.hash = `#/pet/${i}`; }
     else {
       UI.sfx.wrong();
-      UI.toast(`再攒 ${Math.max(0, ECON.unlockAt(i) - s.lifetimePoints)} 积分就能解锁啦！`);
-      TTS.speak({ text: `再攒一点积分就能解锁${PETS[i].name}啦，加油！`, lang: 'zh-CN' });
+      const prev = i === 0 || i - 1 < n;
+      UI.toast(prev ? `还差 ${Math.max(0, ECON.unlockAt(i) - s.lifetimePoints)} 积分就能解锁啦！` : '请先解锁上一只宠物');
     }
   });
   setTimeout(() => UI.checkUnlockCelebration(), 400);
 };
 
-/* ---------- ⑤ 宠物详情页（购粮/投喂/换装一站式） ---------- */
+/* ---------- ④ 宠物详情页（购粮 / 投喂 / 换装一站式） ---------- */
 Pages.pet = (el, arg) => {
   const idx = +arg;
   if (!Store.isUnlocked(idx)) return location.hash = '#/pets';
   const p = PETS[idx];
   const draw = () => {
-    const pd = Store.pet(idx);
-    const [fn, fe, fem] = p.food;
-    const stock = Store.foodCount(fn);
-    const lvMax = pd.lv >= ECON.maxLevel;
-    const afPct = lvMax ? 100 : pd.af;
-    const skin = SKINS[pd.cur];
+    const lv = Store.petLevel(idx), aff = Number(Store.state.affection[idx] || 0);
+    const food = Store.foodCount(idx);
+    const skin = Store.curSkin(idx);
+    const lvMax = lv >= ECON.maxLevel;
+    const heartPct = lvMax ? 100 : (aff % ECON.feedGain) / ECON.feedGain * 100;
     el.innerHTML = `
-      <div class="sub-top back-row"><button class="back" id="back">‹</button>
-        <div><h1 style="font-size:18px">${p.name}</h1><small>${p.L} is for ${p.en}</small></div>
-        <span style="margin-left:auto;font-weight:900;color:#e2708c">Lv${pd.lv}${lvMax ? ' MAX' : ''}</span></div>
-      <div class="detail">
-        <div class="detail-hero" id="stage">
-          <span class="big-pet" id="petEm">${p.em}${skin.hat ? `<span class="hat">${skin.hat}</span>` : ''}</span>
-          <h2>${p.name} <button class="play-word" id="sayEn" style="display:inline-block;margin:0;padding:5px 10px;font-size:11px">${p.en} 🔊</button></h2>
-          <p>最爱吃：${fem} ${fn}（${fe}）</p>
-          <div class="heart-bar"><span>${'♥'.repeat(pd.lv)}${'♡'.repeat(ECON.maxLevel - pd.lv)} 好感度 ${lvMax ? '满满的爱 💕' : `${pd.af}/100`}</span>
-            <div class="bar"><i style="width:${afPct}%"></i></div></div>
+      <div class="sub-top back-row"><button class="back" id="pgBack">‹</button>
+        <div><h1 style="font-size:17px">${p.L} · ${p.en} ${p.name}</h1><small>一站式养成小天地</small></div></div>
+      <div class="detail-hero">
+        <div class="big-pet" id="petStage">${skinVisual(p, skin)}</div>
+        <h2 id="petName">${p.L} · ${p.en} ${p.name} <button class="play-word" id="sayEn">🔊</button></h2>
+        <p>专属食物：${p.food[2]} ${p.food[0]} ${p.food[1]}</p>
+        <div class="heart-bar"><span>好感度 Lv${lv}　${'♥'.repeat(lv)}${'♡'.repeat(ECON.maxLevel - lv)}</span>
+          <div class="bar"><i class="heart-fill" style="width:${heartPct}%"></i></div></div>
+      </div>
+      <div class="detail-card">
+        <div class="food-line">
+          <div class="food-icon">${p.food[2]}</div>
+          <div><b>${p.food[0]} · ${p.food[1]}</b><small>只给 ${p.name} 的专属食物</small></div>
+          <div class="food-count"><span>${food}</span><small> / ${ECON.foodCap}</small></div>
         </div>
-        <div class="detail-card">
-          <h2>🍽️ 专属小厨房</h2>
-          <div class="food-line" style="margin-top:10px">
-            <span class="food-icon">${fem}</span>
-            <div><b>${fn} · ${fe}</b><small>只有它爱吃这个哦，别的食物不能投喂～</small></div>
-            <div class="food-count">${stock}<br><small>库存</small></div>
-          </div>
-        </div>
-        <div class="detail-actions">
-          <button class="a-buy" id="buy">🛒 购粮<br>🟡${ECON.foodPrice}</button>
-          <button class="a-feed" id="feed" ${stock ? '' : 'disabled'}>🍽️ 投喂<br>+${ECON.feedGain} 好感</button>
-          <button class="a-dress" id="dress">👑 换装<br>⭐${SKIN_COST}</button>
-        </div>
-        <div class="detail-card">
-          <h2>👑 服装间</h2>
-          <div class="skins">
-            ${SKINS.map((sk, k) => {
-              const owned = pd.skins.includes(k);
-              return `<button class="skin ${pd.cur === k ? 'active' : owned ? '' : 'locked'}" data-k="${k}">
-                <span class="spreview">${p.em}${sk.hat ? `<span class="hat">${sk.hat}</span>` : ''}</span>
-                <b>${sk.name}</b><small>${sk.desc}</small>
-                <em>${pd.cur === k ? '使用中' : owned ? '点击穿上' : `⭐${SKIN_COST} 兑换`}</em></button>`;
-            }).join('')}
-          </div>
+      </div>
+      <div class="detail-actions">
+        <button id="actBuy">🛒 去商店购粮</button>
+        <button id="actFeed">🍬 投喂宠物</button>
+        <button id="actDress">✨ 换装</button>
+      </div>
+      <div class="detail-card">
+        <div class="section-head" style="padding:0 0 5px"><h2 style="font-size:15px">我的皮肤</h2>
+          <span id="skinBalance">⭐ ${Store.state.stars} · 8 套主题（4原色+4彩色）</span></div>
+        <div class="skins" id="skinList">
+          ${SKIN_CATALOG.map(s => {
+            const owned = Store.skinOwned(idx, s[0]), active = skin === s[0];
+            return `<button class="skin ${active ? 'active ' : ''}${owned ? '' : 'locked'}" data-skin="${s[0]}">
+              <span class="skin-preview">${skinVisual(p, s[0])}</span>
+              <small>${s[1]} · ${s[4]}</small>
+              <em>${owned ? (active ? '使用中' : '已拥有') : s[3] + '⭐'}</em></button>`;
+          }).join('')}
         </div>
       </div>`;
-    el.querySelector('#back').onclick = () => { TTS.stop(); location.hash = '#/pets'; };
+    el.querySelector('#pgBack').onclick = () => { TTS.stop(); location.hash = '#/pets'; };
     el.querySelector('#sayEn').onclick = () => TTS.speak([{ text: p.en, lang: 'en-US' }, { text: p.name, lang: 'zh-CN' }]);
-    el.querySelector('#buy').onclick = () => shopModal();
-    el.querySelector('#feed').onclick = () => feed();
-    el.querySelectorAll('.skin').forEach(b => b.onclick = () => dress(+b.dataset.k));
+    el.querySelector('#actBuy').onclick = shopModal;
+    el.querySelector('#actFeed').onclick = feed;
+    el.querySelector('#actDress').onclick = dressModal;
+    el.querySelectorAll('#skinList .skin').forEach(b => b.onclick = () => tapSkin(b.dataset.skin));
 
-    /* ---- 投喂：抛物线飞入 + 弹跳 + 粒子 ---- */
+    /* ---- 投喂：抛物线飞入 + 好感升级（demo 外观 + PRD 数值） ---- */
     function feed() {
-      if (!Store.takeFood(fn)) {
-        UI.toast('没有口粮啦，快去商店购买食物吧～');
-        TTS.speak({ text: '没有食物了，快去商店购买食物吧', lang: 'zh-CN' });
+      if (!Store.takeFood(idx)) {
+        UI.sfx.wrong();
+        UI.toast('没有口粮啦，先去商店购粮吧～');
+        TTS.speak({ text: '没有食物了，先去商店购买食物吧', lang: 'zh-CN' });
         return;
       }
       UI.sfx.feed();
-      const stage = el.querySelector('#stage'), petEl = el.querySelector('#petEm');
+      const stage = el.querySelector('#petStage');
       const fly = document.createElement('span');
-      fly.textContent = fem;
+      fly.textContent = p.food[2];
       fly.style.cssText = 'position:absolute;font-size:40px;left:50%;bottom:6px;z-index:5;transition:all .7s cubic-bezier(.5,-.4,.9,.6)';
       stage.appendChild(fly);
       requestAnimationFrame(() => requestAnimationFrame(() => {
@@ -341,90 +280,92 @@ Pages.pet = (el, arg) => {
       }));
       setTimeout(() => {
         fly.remove();
-        petEl.style.transition = 'transform .25s'; petEl.style.transform = 'scale(1.25) rotate(8deg)';
+        const petEl = stage.querySelector('.wear-stack');
+        if (petEl) { petEl.style.transition = 'transform .25s'; petEl.style.transform = 'scale(1.25) rotate(8deg)'; setTimeout(() => { petEl.style.transform = ''; }, 300); }
+        const prevLv = Store.petLevel(idx);
+        Store.addAffection(idx, ECON.feedGain);
         UI.burst(60);
-        setTimeout(() => { petEl.style.transform = ''; }, 300);
-        /* 好感成长判定 */
-        if (pd.lv < ECON.maxLevel) {
-          pd.af += ECON.feedGain;
-          if (pd.af >= 100) {
-            pd.af -= 100; pd.lv++;
-            Store.addStars(ECON.levelUpStars);
-            UI.glowFlash(); UI.sfx.levelup(); UI.burst(180);
-            Store.save();
-            const d = openSheet(`<div class="sheet-head"><h3>好感升级！</h3><button class="close" data-x="hide">💕</button></div>
-              <span class="d-em">${p.em}💕</span>
-              <p><b>${p.name}</b> 更喜欢你了，升到 <b>Lv${pd.lv}</b>！<br>奖励 ⭐×${ECON.levelUpStars}${pd.lv === ECON.maxLevel ? '<br>已达满级，收获满满的爱！' : ''}</p>`,
-              { dismissable: false });
-            const b = document.createElement('button'); b.className = 'primary'; b.style.margin = '14px auto 0'; b.textContent = '开心！';
-            b.onclick = () => { d.close(); draw(); };
-            d.el.appendChild(b);
-            TTS.speak({ text: `${p.name}更喜欢你了！`, lang: 'zh-CN' });
-            return;
-          }
-        } else pd.af = 100;
-        Store.save(); draw();
-        UI.toast(`${p.name}吃得津津有味～`);
+        if (Store.petLevel(idx) > prevLv) {
+          UI.sfx.levelup(); UI.burst(160);
+          TTS.speak({ text: `${p.name}更喜欢你了！`, lang: 'zh-CN' });
+          UI.toast(`${p.name} 好感度升到 Lv${Store.petLevel(idx)} 啦！💕`);
+        } else {
+          UI.toast(`${p.name}吃得津津有味～`);
+        }
+        draw();
       }, 700);
     }
 
-    /* ---- 购粮弹层：只卖这只宠物的专属食物 ---- */
+    /* ---- 购粮弹层（补 demo 死链：10 积分/份，扣余额） ---- */
     function shopModal() {
-      const s = Store.state;
-      const atCap = Store.foodCount(fn) >= ECON.foodCap;
+      const atCap = Store.foodCount(idx) >= ECON.foodCap;
       const d = openSheet(`
-        <div class="sheet-head"><h3>🛒 ${p.name}的专属粮仓</h3><button class="close" data-x="hide">✕</button></div>
-        <p>这里只有 <b>${p.name}</b> 爱吃的食物哦</p>
+        <div class="sheet-head"><h3>🛒 ${p.name}的专属粮仓</h3><button class="close" data-x="hide">×</button></div>
+        <p class="study-sub">这里只有 <b>${p.name}</b> 爱吃的食物哦</p>
         <div class="sheet-item">
-          <span class="food-big">${fem}</span>
-          <div class="sheet-item-main"><b>${fn} · ${fe}</b><small>现有 ${Store.foodCount(fn)} 个（上限 ${ECON.foodCap}）</small></div>
-          <button class="buy ${atCap ? 'disabled' : ''}" data-x="buy">${atCap ? '已满' : `🟡${ECON.foodPrice}<br>购买`}</button>
+          <span class="food-big">${p.food[2]}</span>
+          <div class="sheet-item-main"><b>${p.food[0]} · ${p.food[1]}</b><small>现有 ${Store.foodCount(idx)} 个（上限 ${ECON.foodCap}）</small></div>
+          <button class="buy" id="doBuy">${atCap ? '已满' : `🟡${ECON.foodPrice}<br>购买`}</button>
         </div>
-        <p style="margin-top:12px">可用积分：<b style="color:#5875dc">🟡${s.points}</b>（购买只扣积分，不影响累计解锁进度）`);
-      const buy = d.el.querySelector('[data-x="buy"]');
-      buy.onclick = () => {
+        <p class="study-sub" style="margin-top:12px">可用积分：<b style="color:#5875dc">🟡${Store.state.points}</b>（购买只扣积分，不影响累计解锁进度）`);
+      d.el.querySelector('#doBuy').onclick = () => {
         if (atCap) return;
         if (!Store.spendPoints(ECON.foodPrice)) {
-          UI.toast('积分还不够，去闯关攒一攒吧～');
-          TTS.speak({ text: '积分不够啦，去学习闯关攒积分吧', lang: 'zh-CN' });
+          UI.toast('积分还不够，去学习攒一攒吧～');
+          TTS.speak({ text: '积分不够啦，去学习可以攒积分哦', lang: 'zh-CN' });
           UI.sfx.wrong(); return;
         }
-        Store.addFood(fn, 1);
+        Store.addFood(idx, 1);
         UI.sfx.star(); UI.toast('购买成功！');
-        draw(); shopModal();   // 重绘页面并刷新商店弹层内的库存/积分数字
+        draw(); shopModal();   // 刷新弹层内库存/积分数字
       };
     }
 
-    /* ---- 换装（皮肤栏直接点击） ---- */
-    function dress(k) {
-      if (pd.cur === k) return;
-      const sk = SKINS[k];
-      const owned = pd.skins.includes(k);
-      if (!owned) {
-        if (!Store.spendStars(SKIN_COST)) {
-          UI.toast('星星不够，去英文关卡攒星星吧～');
-          TTS.speak({ text: '星星不够啦，闯英文关卡可以攒星星哦', lang: 'zh-CN' });
-          UI.sfx.wrong(); return;
+    /* ---- 换装弹层（demo openDress 结构） ---- */
+    function dressModal() {
+      const d = openSheet(`
+        <div class="sheet-head"><h3>给 ${p.name} 换装</h3><button class="close" data-x="hide">×</button></div>
+        <p class="study-sub" style="margin:10px 0 4px">每只动物专属 8 套成品图：4 套原色、4 套彩色 · 当前 ⭐ ${Store.state.stars}</p>
+        <div class="dress-grid">
+          ${SKIN_CATALOG.map(s => {
+            const owned = Store.skinOwned(idx, s[0]), active = Store.curSkin(idx) === s[0];
+            return `<button class="dress-card ${active ? 'active ' : ''}${owned ? '' : 'locked'}" data-skin="${s[0]}">
+              <span class="dress-preview">${skinVisual(p, s[0])}</span>
+              <b>${s[1]}</b><small>${s[4]} · ${owned ? (active ? '正在穿着' : '点击切换') : s[3] + ' ⭐ 解锁'}</small></button>`;
+          }).join('')}
+        </div>`);
+      d.el.querySelectorAll('.dress-card').forEach(b => b.onclick = () => { d.close(); tapSkin(b.dataset.skin); });
+    }
+
+    /* ---- 星星购皮肤 / 穿戴 ---- */
+    function tapSkin(skinId) {
+      const cat = SKIN_CATALOG.find(x => x[0] === skinId);
+      if (!cat) return;
+      if (!Store.skinOwned(idx, skinId)) {
+        if (Store.state.stars < cat[3]) {
+          UI.sfx.wrong();
+          UI.toast('星星还不够，完成学习就能解锁这套皮肤');
+          return;
         }
-        pd.skins.push(k);
+        Store.spendStars(cat[3]);
+        Store.buySkin(idx, skinId);
+        Store.equipSkin(idx, skinId);
         UI.burst(120); UI.sfx.star();
-        TTS.speak({ text: `哇！${sk.name}！${p.name}变得更漂亮了！`, lang: 'zh-CN' });
-      } else UI.sfx.pop();
-      pd.cur = k; Store.save();
-      /* 换装闪光旋转动效后重绘 */
-      const petEl = el.querySelector('#petEm');
-      if (Store.state.settings.anim && petEl) {
-        petEl.style.transition = 'transform .8s, filter .8s';
-        petEl.style.transform = 'rotate(360deg) scale(1.2)';
-        petEl.style.filter = 'drop-shadow(0 0 24px gold)';
-        setTimeout(() => draw(), 650);
-      } else draw();
+        TTS.speak({ text: `哇！${cat[1]}！${p.name}变得更漂亮了！`, lang: 'zh-CN' });
+        UI.toast('已解锁并穿上 ' + cat[1]);
+        draw(); return;
+      }
+      if (Store.curSkin(idx) === skinId) return;
+      Store.equipSkin(idx, skinId);
+      UI.sfx.pop();
+      UI.toast(skinId === 'forest' ? '已换回自然森林套装' : '已穿上 ' + cat[1]);
+      draw();
     }
   };
   draw();
 };
 
-/* ---------- ⑥ 家长中心 ---------- */
+/* ---------- ⑤ 家长中心（demo 三卡 + 存档备份 + 家长门） ---------- */
 Pages.parent = (el, arg, done) => {
   /* 简易家长门：防止孩子自行修改管控 */
   const gate = sessionStorage.getItem('parentOK');
@@ -447,35 +388,38 @@ Pages.parent = (el, arg, done) => {
     el.querySelector('#ans').onkeydown = e => { if (e.key === 'Enter') chk(); };
     return;
   }
-  const st = Store.stats();
-  const mm = Math.floor(st.seconds / 60), fmt = mm >= 60 ? `${Math.floor(mm / 60)} 小时 ${mm % 60} 分` : `${mm} 分钟`;
+  const s = Store.state, st = Store.stats();
+  const fmtMin = Math.max(s.minutes, Math.floor(s.seconds / 60));
   el.innerHTML = `
-    <div class="sub-top"><div><h1>👨‍👩‍👧 家长中心</h1><small>数据仅保存在本机浏览器 · 纯净无广告</small></div></div>
+    <div class="sub-top back-row"><button class="back" id="pgBack">‹</button>
+      <div><h1>家长中心</h1><small>陪伴每一点小小成长 · 数据仅保存在本机</small></div></div>
 
-    <div class="parent-card"><h3>📊 学习小报告</h3>
+    <div class="parent-card"><h3>本周学习小报告</h3>
       <div class="stats">
-        <div class="stat"><b>${st.letters}/26</b><span>已学英文字母</span></div>
-        <div class="stat"><b>${st.words}</b><span>已学英文单词</span></div>
-        <div class="stat"><b>${st.hanzi}</b><span>已学汉字</span></div>
-        <div class="stat"><b>${st.pinyin}</b><span>已学拼音</span></div>
-        <div class="stat"><b>${fmt}</b><span>总学习时长</span></div>
+        <div class="stat"><b>${st.learned.letters}</b><span>已学字母</span></div>
+        <div class="stat"><b>${st.learned.words}</b><span>已学单词</span></div>
+        <div class="stat"><b>${st.learned.hanzi}</b><span>已学汉字</span></div>
+        <div class="stat"><b>${st.learned.pinyin}</b><span>已学拼音</span></div>
+        <div class="stat"><b>${fmtMin}min</b><span>总学习时长</span></div>
       </div></div>
 
-    <div class="parent-card"><h3>🐾 宠物养成数据</h3>
+    <div class="parent-card"><h3>宠物养成数据</h3>
       <div class="stats">
-        <div class="stat"><b>${st.petsUnlocked}/26</b><span>已解锁宠物</span></div>
-        <div class="stat"><b>Lv ${st.avgLv}</b><span>宠物平均好感等级</span></div>
-        <div class="stat"><b>⭐${st.stars} / 🟡${st.points}</b><span>星星 / 可用积分</span></div>
+        <div class="stat"><b>${st.petsUnlocked} / 26</b><span>已解锁宠物</span></div>
+        <div class="stat"><b>${st.stars} ⭐</b><span>星星余额</span></div>
+        <div class="stat"><b>${st.lifetime}</b><span>累计积分</span></div>
+        <div class="stat"><b>Lv.${st.avgLevel}</b><span>平均好感等级</span></div>
         <div class="stat"><b>${st.foodTotal}</b><span>食物库存总量</span></div>
       </div></div>
 
-    <div class="parent-card"><h3>⏰ 使用设置</h3>
-      <div class="setting"><div>防沉迷时长管控<small>到时间后休息提醒，需家长解除</small></div>
-        <div class="timer-btns" id="limit">${[0, 5, 10, 15].map(m => `<button data-m="${m}" class="timer-btn ${Store.state.settings.limit === m ? 'active' : ''}">${m === 0 ? '不限' : m + ' 分'}</button>`).join('')}</div></div>
-      <div class="setting"><div>动效全开<small>低配设备或易兴奋的孩子建议关闭</small></div>
-        <button class="switch ${Store.state.settings.anim ? 'on' : ''}" id="anim"><i></i></button></div>
-      <div class="setting" style="border-top:0;display:block">
-        <div class="pure-badge" style="margin-top:8px"><span>✅ 无广告</span><span>✅ 无长视频</span><span>✅ 无负面惩罚</span><span>✅ 无外部跳转</span><span>✅ 免费养成</span></div></div>
+    <div class="parent-card"><h3>使用设置</h3>
+      <div class="setting"><div>每日学习时长<small id="timerHint">本次学习 ${s.timer} 分钟后温柔提醒休息</small></div>
+        <div class="timer-btns" id="timerBtns">${[5, 10, 15].map(m => `<button class="timer-btn ${s.timer === m ? 'active' : ''}" data-min="${m}">${m}分钟</button>`).join('')}</div></div>
+      <div class="setting"><div>动画效果<small>低配设备可以关闭</small></div>
+        <button class="switch ${s.motion ? 'on' : ''}" id="motionSwitch"><i></i></button></div>
+      <div class="setting"><div>纯净模式<small>无广告 · 无外部跳转 · 正向鼓励</small></div>
+        <button class="switch ${s.clean ? 'on' : ''}" id="cleanSwitch"><i></i></button></div>
+      <button class="primary" style="margin-top:14px;background:#f0f3f8;color:#8290a4" id="rstBtn">重置本机体验数据</button>
     </div>
 
     <div class="parent-card"><h3>💾 存档备份（换设备时迁移）</h3>
@@ -483,32 +427,46 @@ Pages.parent = (el, arg, done) => {
       <div class="data-btns">
         <button class="data-btn d-export" id="exp"><span class="db-em">📤</span>导出存档码</button>
         <button class="data-btn d-import" id="imp"><span class="db-em">📥</span>导入存档码</button>
-        <button class="data-btn d-reset" id="rst"><span class="db-em">🗑️</span>重置全部数据</button>
       </div>
     </div>`;
 
-  el.querySelectorAll('#limit .timer-btn').forEach(b => b.onclick = () => {
-    Store.state.settings.limit = +b.dataset.m; Store.save();
-    el.querySelectorAll('#limit .timer-btn').forEach(x => x.classList.toggle('active', x === b));
-    UI.toast(b.dataset.m === '0' ? '已关闭时长管控' : `已设置 ${b.dataset.m} 分钟休息提醒`);
-    window.sessionSecReset && window.sessionSecReset();
+  el.querySelector('#pgBack').onclick = () => { TTS.stop(); location.hash = '#/home'; };
+  el.querySelectorAll('#timerBtns .timer-btn').forEach(b => b.onclick = () => {
+    Store.state.timer = +b.dataset.min; Store.save();
+    if (window.sessionSecReset) window.sessionSecReset();
+    UI.toast(`已设置为 ${b.dataset.min} 分钟，今天会温柔提醒休息`);
+    Pages.parent(el, arg, done);
   });
-  el.querySelector('#anim').onclick = function () {
-    Store.state.settings.anim = !Store.state.settings.anim; Store.save();
-    this.classList.toggle('on', Store.state.settings.anim);
-    document.documentElement.classList.toggle('no-anim', !Store.state.settings.anim);
+  el.querySelector('#motionSwitch').onclick = () => {
+    Store.state.motion = !Store.state.motion; Store.save();
+    applyMotion();
+    UI.toast(Store.state.motion ? '动画效果已开启' : '动画效果已关闭');
+    Pages.parent(el, arg, done);
+  };
+  el.querySelector('#cleanSwitch').onclick = () => {
+    Store.state.clean = !Store.state.clean; Store.save();
+    UI.toast(Store.state.clean ? '纯净模式已开启' : '纯净模式已关闭');
+    Pages.parent(el, arg, done);
+  };
+  el.querySelector('#rstBtn').onclick = () => {
+    const d = openSheet(`<div class="sheet-head"><h3>⚠️ 确认重置？</h3><button class="close" data-x="hide">×</button></div>
+      <p class="study-sub">将清空所有学习进度、星星、积分和宠物养成数据，无法恢复</p>
+      <div class="btns"><button class="primary ghost" data-x="no">取消</button>
+        <button class="primary" data-x="yes" style="background:#ef7b7b">确认重置</button></div>`);
+    d.el.querySelector('[data-x="no"]').onclick = () => d.close();
+    d.el.querySelector('[data-x="yes"]').onclick = () => { Store.reset(); d.close(); UI.toast('已重置'); setTimeout(() => location.hash = '#/home', 500); };
   };
   el.querySelector('#exp').onclick = () => {
     const code = Store.exportCode();
-    const d = openSheet(`<div class="sheet-head"><h3>📤 存档码</h3><button class="close" data-x="hide">✕</button></div>
-      <p>长按复制，妥善保管</p>
+    const d = openSheet(`<div class="sheet-head"><h3>📤 存档码</h3><button class="close" data-x="hide">×</button></div>
+      <p class="study-sub">长按复制，妥善保管</p>
       <textarea class="export-ta" readonly id="ta">${code}</textarea>
       <div class="btns"><button class="primary" data-x="copy">📋 复制</button></div>`);
     d.el.querySelector('[data-x="copy"]').onclick = () => { navigator.clipboard.writeText(code).then(() => UI.toast('已复制 ✅')); };
   };
   el.querySelector('#imp').onclick = () => {
-    const d = openSheet(`<div class="sheet-head"><h3>📥 导入存档</h3><button class="close" data-x="hide">✕</button></div>
-      <p>粘贴之前导出的存档码</p>
+    const d = openSheet(`<div class="sheet-head"><h3>📥 导入存档</h3><button class="close" data-x="hide">×</button></div>
+      <p class="study-sub">粘贴之前导出的存档码</p>
       <textarea class="export-ta" id="ta"></textarea>
       <div class="btns"><button class="primary" data-x="do">恢复</button></div>`);
     d.el.querySelector('[data-x="do"]').onclick = () => {
@@ -516,12 +474,12 @@ Pages.parent = (el, arg, done) => {
       else UI.toast('存档码不正确哦');
     };
   };
-  el.querySelector('#rst').onclick = () => {
-    const d = openSheet(`<div class="sheet-head"><h3>⚠️ 确认重置？</h3><button class="close" data-x="hide">✕</button></div>
-      <p>将清空所有学习进度、星星、积分和宠物养成数据，无法恢复</p>
-      <div class="btns"><button class="primary ghost" data-x="no">取消</button>
-        <button class="primary" data-x="yes" style="background:#ef7b7b">确认重置</button></div>`);
-    d.el.querySelector('[data-x="no"]').onclick = () => d.close();
-    d.el.querySelector('[data-x="yes"]').onclick = () => { Store.reset(); d.close(); UI.toast('已重置'); setTimeout(() => location.hash = '#/home', 500); };
-  };
 };
+
+/* 动效开关：body.no-motion + 去阴影（demo toggleSetting 同款） */
+function applyMotion() {
+  const on = Store.state.motion;
+  document.body.classList.toggle('no-motion', !on);
+  document.documentElement.classList.toggle('no-motion', !on);
+  document.body.style.setProperty('--shadow', on ? '' : 'none');
+}

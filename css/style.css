@@ -58,7 +58,7 @@ small { font-weight: 400; }
 .hero h1 { font-size: 24px; line-height: 1.2; }
 .hero p { margin: 7px 0 14px; color: #55718a; font-size: 13px; }
 .hero-row { display: flex; align-items: end; justify-content: space-between; }
-.hero-btn { padding: 11px 15px; border-radius: 14px; background: #fff; color: #5471df; font-weight: 800; font-size: 13px; box-shadow: 0 6px 13px #6d9ac51a; }
+.hero-btn { padding: 11px 15px; border-radius: 14px; background: linear-gradient(120deg, #34c8b9, #5a7cf0); color: #fff; font-weight: 800; font-size: 13px; box-shadow: 0 7px 16px #4ba9c455; }
 .hero-pet { font-size: 58px; line-height: .8; animation: bob 3s ease-in-out infinite; }
 @keyframes bob { 50% { transform: translateY(-5px) rotate(3deg); } }
 
@@ -331,6 +331,61 @@ small { font-weight: 400; }
 
 /* ---------- 动画关闭 ---------- */
 .no-anim *, .no-anim *::before, .no-anim *::after { animation: none !important; transition: none !important; }
+
+/* ---------- demo：学习页四 tab 与模块底色 ---------- */
+.learn-tabs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 7px; padding: 0 16px 11px; }
+.learn-tabs button { padding: 10px 4px; border-radius: 14px; background: #eef3fb; color: #7182a0; font-size: 12px; font-weight: 800; }
+.learn-tabs button.active { background: #fff; color: #526fd6; box-shadow: 0 6px 14px #7796b522; }
+.g-blue { background: linear-gradient(135deg, #dcf1ff, #e8ecff); }
+.g-pink { background: linear-gradient(135deg, #ffe7ea, #fff3d6); }
+.g-yellow { background: linear-gradient(135deg, #fff1c8, #ffe7e8); }
+.g-green { background: linear-gradient(135deg, #dff6e7, #dcf1ff); }
+.lesson > button { background: #ecf2ff; color: #5a79e5; border-radius: 11px; padding: 9px 10px; font-weight: 800; font-size: 11px; flex: none; }
+.lesson > button.done { background: #e2f7ea; color: #3c9a73; }
+
+/* ---------- 练习弹层：四段条 + action-grid ---------- */
+.practice-nav { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin: 12px 0 4px; }
+.practice-nav button { padding: 9px 2px; border-radius: 12px; background: #f1f4fa; color: #7f8da6; font-size: 10.5px; font-weight: 800; line-height: 1.3; }
+.practice-nav button.active { background: #e5ecff; color: #4f6ed8; }
+.practice-nav button.done { color: #2f9d6f; background: #e7f8ef; }
+.action-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin-top: 12px; }
+.action-btn { padding: 13px 9px; border-radius: 16px; background: #f5f8ff; display: flex; flex-direction: column; align-items: center; gap: 3px; }
+.action-btn .ab-ico { font-size: 24px; }
+.action-btn .ab-label { font-weight: 800; font-size: 13px; color: #526fd6; }
+.action-btn small { color: #9aa8bd; font-size: 10px; }
+.action-btn.practice-done { background: #e7f8ef; }
+.action-btn.practice-done .ab-label, .action-btn.practice-done small { color: #2f9d6f; }
+.back-study { color: #7187b5; font-size: 11px; font-weight: 800; margin: 8px 0 2px; }
+.trace-head { font-size: 13px; font-weight: 800; color: #526fd6; margin-top: 10px; }
+.sheet .study-card { margin: 12px 0 0; }
+.sheet .study-card .play-row { margin: 12px 0 0; width: 100%; }
+
+/* ---------- 皮肤成品图堆叠（demo wear-stack） ---------- */
+.wear-stack { position: relative; display: inline-block; line-height: 1; }
+.wear-stack .pet-photo { width: 1em; height: 1em; object-fit: contain; vertical-align: middle; display: inline-block; }
+.wear-stack .skin-fallback { display: none; font-size: 1em; line-height: 1; }
+.pet-art .wear-stack, .skin-preview .wear-stack, .dress-preview .wear-stack { font-size: 42px; }
+.skin-preview { display: grid; place-items: center; height: 56px; font-size: 42px; }
+
+/* ---------- 换装弹层 dress-grid ---------- */
+.dress-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 9px; margin-top: 12px; }
+.dress-card { background: #f6f8fb; border: 2px solid transparent; border-radius: 15px; padding: 10px 4px; }
+.dress-card b { display: block; font-size: 11px; margin-top: 4px; }
+.dress-card small { display: block; font-size: 9px; color: #8995ab; margin-top: 3px; line-height: 1.3; }
+.dress-card.active { background: #eaf0ff; border-color: #7890ee; }
+.dress-card.locked { opacity: .78; }
+
+/* ---------- 小游戏：听音识图 / 图文配对 ---------- */
+.quiz-picture { font-size: 64px; line-height: 1.2; margin: 8px 0 2px; }
+.quiz-picture.sm { font-size: 38px; margin: 0; }
+.quiz-label { font-size: 12px; color: #8b98ad; }
+.quiz-option { flex-direction: column; gap: 3px; }
+.quiz-word-opt { font-size: 22px; font-weight: 900; color: #526fd6; }
+.quiz-option.wrong { animation: shake .4s; background: #fff4d9; color: #b08434; }
+.opts { display: grid; gap: 9px; margin-top: 12px; }
+
+/* ---------- 动画关闭（demo no-motion） ---------- */
+.no-motion *, .no-motion *::before, .no-motion *::after { animation: none !important; transition: none !important; }
 
 @media (max-width: 380px) {
   .hero h1 { font-size: 21px; }

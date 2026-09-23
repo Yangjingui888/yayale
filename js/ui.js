@@ -57,7 +57,7 @@ const UI = (() => {
   function sizeFx() { fx.width = innerWidth * devicePixelRatio; fx.height = innerHeight * devicePixelRatio; }
   addEventListener('resize', sizeFx); sizeFx();
   function burst(n = 120) {
-    if (!Store.state.settings.anim) return;
+    if (!Store.state.motion) return;
     const dpr = devicePixelRatio;
     const colors = ['#ffd86f', '#ffb1b9', '#a5ead1', '#8fb8ff', '#c5b8ff'];
     const chars = ['⭐', '🎉', '✨', '🌟', '', '●'];
@@ -87,9 +87,16 @@ const UI = (() => {
     else { raf = null; fxc.clearRect(0, 0, fx.width, fx.height); }
   }
   function glowFlash() {
-    if (!Store.state.settings.anim) return;
+    if (!Store.state.motion) return;
     burst(200);
   }
+
+  /* ---------- 皮肤图加载失败→回退显示 emoji（防 GitHub Pages 冷缓存/缺图） ---------- */
+  window.skinImgFail = function (img) {
+    img.style.display = 'none';
+    const fb = img.parentElement && img.parentElement.querySelector('.skin-fallback');
+    if (fb) fb.style.display = 'inline';
+  };
 
   /* ---------- 正向鼓励话术（全程无负面） ---------- */
   const CHEER_ZH = ['你真棒！', '太厉害啦！', '做得好！', '哇，真聪明！', '继续加油哦！'];
@@ -98,7 +105,7 @@ const UI = (() => {
   function cheer() { const t = pick(CHEER_ZH); toast(t); TTS.speak({ text: t, lang: 'zh-CN' }); }
   function cheerNear() { const t = pick(CHEER_NEAR); toast(t); TTS.speak({ text: t, lang: 'zh-CN' }); }
 
-  /* ---------- 新宠物解锁庆祝（demo achievement 风格） ---------- */
+  /* ---------- 新宠物解锁庆祝（demo openAchievement 同款文案） ---------- */
   let celebrating = false;
   function checkUnlockCelebration() {
     if (celebrating) return;
@@ -108,19 +115,21 @@ const UI = (() => {
     const p = PETS[idx];
     sfx.unlock(); burst(160);
     const d = dialog(`
-      <div class="sheet-head"><h3>新伙伴来啦！</h3><button class="close" data-x="hide">🎉</button></div>
-      <span class="d-em">${p.em}</span>
-      <p>累计积分达到 <b style="color:#5875dc">${ECON.unlockAt(idx)}</b>，自动解锁，积分不清零哦</p>
-      <div class="achievement"><div class="badge">${p.em}</div>
-        <div><b>${p.L} · ${p.en} ${p.name}</b>
-        <small>专属食物：${p.food[2]} ${p.food[0]} · ${p.food[1]}</small></div>
+      <div class="study-card">
+        <div class="study-visual">🎉</div>
+        <h2 style="font-size:20px">新伙伴解锁啦！</h2>
+        <p class="study-sub">你已经累计获得 ${Store.state.lifetimePoints} 积分</p>
+        <div class="achievement"><div class="badge">${p.em}</div>
+          <div><b>${p.L} · ${p.en} ${p.name}</b>
+          <small>专属食物：${p.food[2]} ${p.food[0]} · ${p.food[1]}</small></div>
+        </div>
       </div>`, { dismissable: false });
     const btn = document.createElement('button');
-    btn.className = 'primary'; btn.textContent = '去看看新伙伴';
+    btn.className = 'primary'; btn.style.margin = '16px auto 0'; btn.textContent = '去看看新伙伴';
     btn.onclick = () => {
       Store.popUnlock();
       d.close(); celebrating = false;
-      TTS.speak({ text: `恭喜你解锁了新宠物 ${p.name}！`, lang: 'zh-CN' });
+      TTS.speak({ text: `Congratulations! ${p.en} is unlocked.`, lang: 'en-US' });
       location.hash = '#/pets';
       setTimeout(() => checkUnlockCelebration(), 800);   // 队列中还有则继续庆祝
     };
