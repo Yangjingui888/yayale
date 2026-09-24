@@ -220,22 +220,24 @@ const Learn = (() => {
     })(0);
   }
 
-  /* ----- AI 跟读：识别评分 + MediaRecorder 当场回听，开口即过 ----- */
+  /* ----- AI 跟读：两步手动——点话筒开始读，读完再点一次才结束评分（不再开口即发奖） ----- */
   function openFollow() {
     const item = current.item;
     const body = practiceShell('follow', `
       <div class="study-card">
         <div class="study-word">🎙️ AI跟读</div>
-        <div class="study-sub">先听示范，再点话筒大声读出来</div>
+        <div class="study-sub">先听示范，点话筒开始读，读完再点一下结束</div>
         <button class="play-word" id="followPlay">🔊 播放示范</button>
         <button class="mic" id="micBtn" aria-label="开始录音跟读">🎤</button>
+        <div class="follow-result tip" id="followStep">第 1 步：点击话筒，开始读</div>
         <div class="meter"><i id="meterBar"></i></div>
-        <div class="follow-result tip" id="followResult">点击话筒开始跟读</div>
+        <div class="follow-result tip" id="followResult">准备就绪，点击话筒开始读</div>
         <div id="clipHost"></div>
         <div style="margin-top:12px"><button class="primary ghost" id="followSkip">麦克风不方便？我读过啦</button></div>
       </div>`);
     const micBtn = body.querySelector('#micBtn');
     const meter = body.querySelector('#meterBar');
+    const step = body.querySelector('#followStep');
     const result = body.querySelector('#followResult');
     const speakDemo = () => { UI.sfx.pop(); TTS.speak(item.play); };
     body.querySelector('#followPlay').onclick = speakDemo;
@@ -243,18 +245,18 @@ const Learn = (() => {
     setTimeout(speakDemo, 400);
 
     const clipHost = body.querySelector('#clipHost');
-    let listening = false, abortParts = [], resolved = false;
-    let recorder = null, chunks = [], recT0 = 0;
+    let recording = false, abortParts = [], resolved = false;
+    let recorder = null, chunks = [], recT0 = 0, rafId = null;
+    let heardText = '', spoke = false;
     function releaseStream() { abortParts.forEach(f => { try { f(); } catch (e) {} }); abortParts = []; }
-    micCleanup = () => { listening = false; releaseStream(); };
+    micCleanup = () => { recording = false; if (rafId) { cancelAnimationFrame(rafId); rafId = null; } releaseStream(); };
     function dropClip() { if (clipUrl) { URL.revokeObjectURL(clipUrl); clipUrl = null; } if (clipHost) clipHost.innerHTML = ''; }
 
-    micBtn.onclick = async () => {
-      if (listening) { micCleanup(); micBtn.classList.remove('listening'); micBtn.textContent = '🎤'; result.textContent = '点击话筒开始跟读'; return; }
+    function startRecording() {
       UI.sfx.tap();
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        listening = true; resolved = false;
+      navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+        if (!body.isConnected) { stream.getTracks().forEach(t => t.stop()); return; }
+        recording = true; resolved = false; heardText = ''; spoke = false;
         dropClip();
         if (window.MediaRecorder) {
           try {
@@ -276,81 +278,77 @@ const Learn = (() => {
           } catch (e) { recorder = null; }
         }
         abortParts.push(() => stream.getTracks().forEach(t => t.stop()));
-        micBtn.classList.add('listening'); micBtn.textContent = '👂';
-        result.textContent = '正在听…大声读出来吧！';
-        startRecognition(stream) || startVolumeMonitor(stream);
-      } catch (e) {
+        startRecognition(stream);
+        startVolumeMonitor(stream);
+        micBtn.classList.add('listening'); micBtn.textContent = '🛑';
+        step.textContent = '第 2 步：正在录音，大声朗读…';
+        result.textContent = '读完后再点一下红色按钮结束';
+      }).catch(() => {
         result.textContent = '麦克风不可用，点「我读过啦」也能通过哦';
-      }
-    };
+      });
+    }
 
-    function doneFollow(msg, score) {
+    function stopAndScore() {
       if (resolved) return;
       resolved = true;
+      const wasRecording = recording;
+      recording = false;
+      if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
       if (recorder && recorder.state !== 'inactive') { try { recorder.stop(); } catch (e) {} }
-      micCleanup();
+      releaseStream();
       micBtn.classList.remove('listening'); micBtn.textContent = '🎤';
       meter.style.width = '0%';
-      result.textContent = msg;
-      finishPractice('follow', '读得真棒！可以继续选择下一个练习环节', score);
+      if (!wasRecording) { result.textContent = '还没有开始录音哦，先点话筒开始读'; resolved = false; recording = false; return; }
+      /* 评分：优先用识别文本，其次依据是否发出过声音（全程正向，不惩罚） */
+      let sc;
+      if (heardText.trim()) sc = scoreFollow(heardText, item.follow.target);
+      else sc = spoke ? 2 : 1;
+      finishPractice('follow', '读得真棒！可以继续选择下一个练习环节', sc);
     }
 
-    /* 优先：SpeechRecognition，按识别文本与目标匹配度评 2~3 星 */
+    micBtn.onclick = () => { recording ? stopAndScore() : startRecording(); };
+
+    /* 语音识别：连续模式累积最终文本，仅用于结束时的判分，不再自动过 */
     function startRecognition(stream) {
       const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-      if (!SR) return null;
+      if (!SR) return;
       let rec;
-      try { rec = new SR(); } catch (e) { return null; }
-      let fellBack = false;
+      try { rec = new SR(); } catch (e) { return; }
       rec.lang = item.follow.lang;
+      rec.continuous = true;
       rec.interimResults = true;
-      rec.continuous = false;
-      const fallback = () => {
-        if (fellBack || resolved) return;
-        fellBack = true;
-        try { rec.abort(); } catch (e) {}
-        startVolumeMonitor(stream);
-      };
       rec.onresult = (ev) => {
-        const t = Array.from(ev.results).map(r => r[0].transcript).join('').trim();
-        if (!t) return;
-        if (!ev.results[ev.results.length - 1].isFinal) return;
-        const sc = scoreFollow(t, item.follow.target);
-        doneFollow(sc === 3 ? '听得清清楚楚，说得标准又流利 ✨' : '听到了！再贴近示范一点会更棒哦', sc);
+        let finalTxt = '';
+        for (let i = 0; i < ev.results.length; i++) {
+          if (ev.results[i].isFinal) finalTxt += ev.results[i][0].transcript;
+        }
+        if (finalTxt.trim()) heardText = finalTxt.trim();
       };
-      rec.onerror = (ev) => { if (ev.error !== 'aborted' && listening) fallback(); };
-      abortParts.push(() => { try { rec.abort(); } catch (e) {} });
-      try { rec.start(); } catch (e) { return null; }
-      /* 6.5s 未识别到 → 音量兜底 */
-      setTimeout(fallback, 6500);
-      return true;
+      rec.onerror = () => {};
+      rec.onend = () => { if (recording && !resolved) { try { rec.start(); } catch (e) {} } };
+      abortParts.push(() => { try { rec.stop(); } catch (e) {} });
+      try { rec.start(); } catch (e) {}
     }
 
-    /* 兜底：音量检测，开口即过 → 2 星 */
+    /* 实时音量条 + 记录是否发出过声音（不自动结束） */
     function startVolumeMonitor(stream) {
-      if (resolved) return;
       const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return;
       const ac = new AC();
       const srcNode = ac.createMediaStreamSource(stream);
       const ana = ac.createAnalyser(); ana.fftSize = 512;
       srcNode.connect(ana);
       const buf = new Uint8Array(ana.frequencyBinCount);
-      let rafId = null; const t0 = Date.now();
-      abortParts.push(() => { if (rafId) cancelAnimationFrame(rafId); try { ac.close(); } catch (e) {} });
+      const stopAudio = () => { if (rafId) cancelAnimationFrame(rafId); try { ac.close(); } catch (e) {} };
+      abortParts.push(stopAudio);
       (function vol() {
-        if (!listening || resolved) return;
-        if (recorder && recorder.state === 'recording' && Date.now() - recT0 > 15000) { try { recorder.stop(); } catch (e) {} }
+        if (!recording || resolved) return;
+        if (recorder && recorder.state === 'recording' && Date.now() - recT0 > 60000) { try { recorder.stop(); } catch (e) {} }
         ana.getByteTimeDomainData(buf);
         let peak = 0;
         for (let i = 0; i < buf.length; i++) peak = Math.max(peak, Math.abs(buf[i] - 128));
         meter.style.width = Math.min(100, peak * 1.6) + '%';
-        if (peak > 26) { doneFollow('听到了！你的声音真有精神 ✨', 2); return; }
-        if (Date.now() - t0 > 8000) {
-          micCleanup();
-          micBtn.classList.remove('listening'); micBtn.textContent = '🎤';
-          result.textContent = '没有听清呢，再试一次，或点「我读过啦」';
-          return;
-        }
+        if (peak > 26) spoke = true;
         rafId = requestAnimationFrame(vol);
       })();
     }

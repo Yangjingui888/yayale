@@ -34,19 +34,39 @@ const TTS = (() => {
     return new Promise(res => {
       if (!synth || !enabled) return res();
       try { synth.cancel(); } catch (e) {}
+      /* 平板/iOS 修复：播报前先 resume，解除引擎被挂起导致的“无声” */
+      try { synth.resume(); } catch (e) {}
       const u = new SpeechSynthesisUtterance(text);
       u.lang = lang;
       const v = pickVoice(lang);
       if (v) u.voice = v;
       u.rate = rate || (isChildLang(lang) ? 0.85 : 0.9);
       u.pitch = 1.15;              // 稍微偏高，更活泼亲和
-      u.onend = u.onerror = () => res();
+      let done = false;
+      const finish = () => { if (done) return; done = true; clearInterval(keep); res(); };
+      u.onend = u.onerror = finish;
       synth.speak(u);
+      /* 平板/iOS 修复：部分内核对较长文本会中途挂起不再发声，定时 pause+resume 保活 */
+      const keep = setInterval(() => {
+        if (!synth.speaking && !synth.pending) { clearInterval(keep); return; }
+        try { synth.pause(); synth.resume(); } catch (e) {}
+      }, 3500);
       /* 兜底：部分内核 onend 不触发 */
-      setTimeout(res, Math.min(9000, 1500 + text.length * 260));
+      setTimeout(finish, Math.min(15000, 1500 + text.length * 260));
     });
   }
   const isChildLang = l => l.startsWith('zh');
+
+  /* 首次用户手势内解锁语音引擎（平板/iOS 要求 speak 必须由交互触发一次） */
+  function unlock() {
+    if (!synth) return;
+    try {
+      try { synth.resume(); } catch (e) {}
+      const u = new SpeechSynthesisUtterance(' ');
+      u.volume = 0; u.rate = 1;
+      synth.speak(u);
+    } catch (e) {}
+  }
 
   /* 依次朗读多段（如：字母名 → 拼读音 → 单词） */
   async function speak(items) {
@@ -59,5 +79,5 @@ const TTS = (() => {
   function stop() { try { synth && synth.cancel(); } catch (e) {} }
   function setEnabled(b) { enabled = b; if (!b) stop(); }
 
-  return { speak, stop, setEnabled };
+  return { speak, stop, setEnabled, unlock };
 })();

@@ -28,6 +28,9 @@ const APP = (() => {
     const h = curHash();
     const showBack = !/^#\/home\/?$/.test(h) && h !== '#/' && h !== '' && !/^#\/me\/?$/.test(h);
     document.getElementById('hudBack').hidden = !showBack;
+    /* 二级页（非首页）隐藏顶部“芽芽乐”品牌，为内容腾出空间 */
+    const brand = document.querySelector('#hud .brand');
+    if (brand) brand.hidden = showBack;
     const name = (h.replace(/^#\/?\//, '') || 'home').split('/')[0];
     const tab = TAB_OF[name] || 'study';
     document.querySelectorAll('#tabbar .nav-item').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
@@ -132,9 +135,9 @@ const APP = (() => {
     location.reload();
   }
 
-  /* ---------- 首次触摸解锁 WebAudio / 语音 ---- */
+  /* ---------- 首次触摸解锁 WebAudio / 语音（平板/iOS 播报需交互触发） ---------- */
   addEventListener('pointerdown', function once() {
-    UI.sfx.tap(); removeEventListener('pointerdown', once);
+    UI.sfx.tap(); TTS.unlock(); removeEventListener('pointerdown', once);
   }, { passive: true });
 
   async function boot() {
