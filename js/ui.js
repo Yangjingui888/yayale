@@ -106,6 +106,7 @@ const UI = (() => {
   function cheerNear() { const t = pick(CHEER_NEAR); toast(t); TTS.speak({ text: t, lang: 'zh-CN' }); }
 
   /* ---------- 新宠物解锁庆祝（demo openAchievement 同款文案） ---------- */
+  /* 独立浮层：不复用 #sheet，避免学习中途弹庆祝冲掉正在进行的练习弹层 */
   let celebrating = false;
   function checkUnlockCelebration() {
     if (celebrating) return;
@@ -114,7 +115,18 @@ const UI = (() => {
     celebrating = true;
     const p = PETS[idx];
     sfx.unlock(); burst(160);
-    const d = dialog(`
+    let mask = document.getElementById('celebrateLayer');
+    if (!mask) {
+      mask = document.createElement('div');
+      mask.id = 'celebrateLayer';
+      mask.className = 'modal-mask';
+      const panel = document.createElement('div');
+      panel.className = 'sheet';
+      mask.appendChild(panel);
+      document.body.appendChild(mask);
+    }
+    const panel = mask.querySelector('.sheet');
+    panel.innerHTML = `
       <div class="study-card">
         <div class="study-visual">🎉</div>
         <h2 style="font-size:20px">新伙伴解锁啦！</h2>
@@ -123,17 +135,18 @@ const UI = (() => {
           <div><b>${p.L} · ${p.en} ${p.name}</b>
           <small>专属食物：${p.food[2]} ${p.food[0]} · ${p.food[1]}</small></div>
         </div>
-      </div>`, { dismissable: false });
+      </div>`;
+    mask.classList.add('show');
     const btn = document.createElement('button');
     btn.className = 'primary'; btn.style.margin = '16px auto 0'; btn.textContent = '去看看新伙伴';
     btn.onclick = () => {
       Store.popUnlock();
-      d.close(); celebrating = false;
+      mask.classList.remove('show'); celebrating = false;
       TTS.speak({ text: `Congratulations! ${p.en} is unlocked.`, lang: 'en-US' });
       location.hash = '#/pets';
       setTimeout(() => checkUnlockCelebration(), 800);   // 队列中还有则继续庆祝
     };
-    d.el.appendChild(btn);
+    panel.appendChild(btn);
   }
 
   return { sfx, toast, dialog, burst, glowFlash, cheer, cheerNear, checkUnlockCelebration };

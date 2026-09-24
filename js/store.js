@@ -10,7 +10,7 @@ const Store = (() => {
     lifetimePoints: 0,      // 累计积分（解锁依据，只增不减）
     completed: [],          // 已完成的课时 key（首次通关判定）
     practiceRecords: [],    // 练习记录（近 500 条，带 1-3 星评分，练习打勾依据）
-    learned: { letters: 0, words: 0, hanzi: 0, pinyin: 0 },
+    learned: { letters: 0, words: 0, hanzi: 0, pinyin: 0, math: 0 },
     minutes: 0,             // 总学习分钟（completeTask +1，兼容 tick 秒表）
     seconds: 0,
     timer: 10,              // 防沉迷分钟（demo 默认 10；0=不限）
@@ -144,13 +144,13 @@ const Store = (() => {
   /* ---------- 学习时长 ---------- */
   function tick(sec) { s.seconds += sec; }
 
-  /* ---------- 今日进度（首页卡：今天练过的课时数，封顶 4） ---------- */
+  /* ---------- 今日进度（首页卡：今天练过的课时数，封顶模块总数） ---------- */
   function todayStr() { const d = new Date(); return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate(); }
   function markDaily(key) {
     if (s.daily.date !== todayStr()) s.daily = { date: todayStr(), keys: [] };
     if (!s.daily.keys.includes(key)) s.daily.keys.push(key);
   }
-  function dailyCount() { return s.daily.date === todayStr() ? Math.min(4, s.daily.keys.length) : 0; }
+  function dailyCount() { return s.daily.date === todayStr() ? Math.min(MODULE_TOTAL, s.daily.keys.length) : 0; }
 
   /* ---------- 统计（家长中心，照 demo renderParent） ---------- */
   function stats() {

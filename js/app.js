@@ -9,7 +9,7 @@ const APP = (() => {
     me:     ['me',     'Pages.me'],
   };
   /* 旧地址重定向（书签兼容） */
-  const LEGACY = { letters: '#/learn/letters', words: '#/learn/words', pinyin: '#/learn/pinyin', hanzi: '#/learn/hanzi', flow: '#/home' };
+  const LEGACY = { letters: '#/learn/letters', words: '#/learn/words', pinyin: '#/learn/pinyin', hanzi: '#/learn/hanzi', math: '#/learn/math', flow: '#/home' };
   let locked = false;
   let started = false;        // 登录成功后的应用主体（计时器等只启一次）
   let timerOn = false;

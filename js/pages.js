@@ -37,7 +37,7 @@ Pages.home = (el) => {
   const need = nextPet ? ECON.unlockAt(n) : 0;
   const gap = nextPet ? Math.max(0, need - s.lifetimePoints) : 0;
   const teaserPet = PETS[pi];
-  const done = Math.min(4, s.completed.length);
+  const done = Math.min(MODULE_TOTAL, s.completed.length);
 
   el.innerHTML = `
     <div class="hero">
@@ -55,12 +55,13 @@ Pages.home = (el) => {
       <button class="module m-pink" data-go="#/learn/words"><em>英语</em><b>单词乐园</b><small>看图学单词</small><span class="ico">🍎</span></button>
       <button class="module m-yellow" data-go="#/learn/hanzi"><em>汉字</em><b>汉字小课堂</b><small>描一描 · 认一认</small><span class="ico">🖌️</span></button>
       <button class="module m-green" data-go="#/learn/pinyin"><em>拼音</em><b>拼音小火车</b><small>听音来拼读</small><span class="ico">🚂</span></button>
+      <button class="module m-purple" data-go="#/learn/math"><em>数学</em><b>数学乐园</b><small>数数 · 口算 · 口诀</small><span class="ico">🔢</span></button>
     </div>
 
     <div class="progress-card">
-      <div class="progress-head"><b>今日学习进度</b><span>${done} / 4 项</span></div>
-      <div class="bar"><i style="width:${done * 25}%"></i></div>
-      <div class="progress-foot"><span>${done >= 4 ? '今天的学习任务完成啦，明天见！' : '完成一关，收集你的第一颗星星'}</span><span>答题有奖励</span></div>
+      <div class="progress-head"><b>今日学习进度</b><span>${done} / ${MODULE_TOTAL} 项</span></div>
+      <div class="bar"><i style="width:${done * (100 / MODULE_TOTAL)}%"></i></div>
+      <div class="progress-foot"><span>${done >= MODULE_TOTAL ? '今天的学习任务完成啦，明天见！' : '完成一关，收集你的第一颗星星'}</span><span>答题有奖励</span></div>
     </div>
 
     <div class="pet-teaser">
@@ -84,28 +85,30 @@ Pages.home = (el) => {
 
 /* ---------- ② 学习页（模块四 tab + 筛选 + 课时列表） ---------- */
 const LEARN_META = {
-  letters: { title: '字母乐园', sub: '跟着小伙伴，一起开口读 · 26 个字母', emoji: '🦊', grad: 'g-blue', filters: ['A-Z', '已学', '待学习'] },
-  words:   { title: '单词乐园', sub: '看图识词 · 6 大主题', emoji: '🍎', grad: 'g-pink', filters: null },
-  hanzi:   { title: '汉字小课堂', sub: '描一描 · 认一认 · 8 组常用字', emoji: '🖌️', grad: 'g-yellow', filters: null },
-  pinyin:  { title: '拼音小火车', sub: '听音来拼读 · 声母韵母', emoji: '🚂', grad: 'g-green', filters: null },
+  letters: { title: '字母乐园', sub: '跟着小伙伴，一起开口读 · 26 个字母', emoji: '🦊', grad: 'g-blue', steps: '发音认知 → 描红练习 → AI跟读 → 小游戏闯关', filters: ['A-Z', '已学', '待学习'] },
+  words:   { title: '单词乐园', sub: '看图识词 · 8 大主题', emoji: '🍎', grad: 'g-pink', steps: '看图认词 → 描红练习 → AI跟读 → 小游戏闯关', filters: null },
+  hanzi:   { title: '汉字小课堂', sub: '描一描 · 认一认 · 8 组常用字', emoji: '🖌️', grad: 'g-yellow', steps: '字形认知 → 描红练习 → AI跟读 → 小游戏闯关', filters: null },
+  pinyin:  { title: '拼音小火车', sub: '听音来拼读 · 声母韵母', emoji: '🚂', grad: 'g-green', steps: '拼音认知 → 描红练习 → AI跟读 → 小游戏闯关', filters: null },
+  math:    { title: '数学乐园', sub: '数数 · 100 以内加减 · 九九乘法表', emoji: '🔢', grad: 'g-grape', steps: '数字认知 → 描一描数字 → 开口认算式 → 口算闯关', filters: null },
 };
+/* 学习页顶部四个入口 tab（数学等模块按课时练习集自动回退） */
+const LEARN_TABS = [['trace', '描红'], ['follow', 'AI跟读'], ['sound', '小游戏']];
 
 Pages.learn = (el, module) => {
   if (!LEARN_META[module]) return location.hash = '#/home';
   const meta = LEARN_META[module];
   const filters = meta.filters || ['全部'].concat(
     module === 'words' ? WORD_THEMES.map(t => t.name) :
-    module === 'pinyin' ? PINYIN_GROUPS.map(g => g.name) : HANZI_GROUPS.map(g => g.name));
+    module === 'pinyin' ? PINYIN_GROUPS.map(g => g.name) :
+    module === 'math' ? MATH_GROUPS.map(g => g.name) : HANZI_GROUPS.map(g => g.name));
   let fi = 0;
   el.innerHTML = `
     <div class="sub-top back-row"><button class="back" id="pgBack">‹</button>
       <div><h1>${meta.title}</h1><small>${meta.sub}</small></div></div>
-    <div class="learn-hero ${meta.grad}"><h2>${meta.title}</h2><p>发音认知 → 描红练习 → AI跟读 → 小游戏闯关</p><div class="learn-hero-art">${meta.emoji}</div></div>
+    <div class="learn-hero ${meta.grad}"><h2>${meta.title}</h2><p>${meta.steps}</p><div class="learn-hero-art">${meta.emoji}</div></div>
     <div class="learn-tabs" id="learnTabs">
       <button class="active" data-tab="learn">学习</button>
-      <button data-tab="trace">描红</button>
-      <button data-tab="follow">AI跟读</button>
-      <button data-tab="game">小游戏</button>
+      ${LEARN_TABS.map(t => `<button data-tab="${t[0]}">${t[1]}</button>`).join('')}
     </div>
     <div class="lesson-filter" id="flt"></div>
     <div class="lesson-list" id="lessonList"></div>
@@ -120,6 +123,10 @@ Pages.learn = (el, module) => {
     if (module === 'words') return WORD_THEMES[+String(x.id).split('_')[0]].name;
     if (module === 'pinyin') return PINYIN_GROUPS[+String(x.id).split('_')[0]].name;
     if (module === 'hanzi') return HANZI_GROUPS[+String(x.id).split('_')[0]].name;
+    if (module === 'math') {
+      const id = String(x.id);
+      return MATH_GROUPS[/^num_/.test(id) ? 0 : /^calc_/.test(id) ? 1 : 2].name;
+    }
     return '';
   }
   function rowVisible(x) {
@@ -143,8 +150,12 @@ Pages.learn = (el, module) => {
       const done = lessonDone(module, x.id);
       const row = document.createElement('div');
       row.className = 'lesson';
+      const icon = module === 'letters' ? x.title.replace('字母 ', '')
+        : module === 'pinyin' ? '<span class="dup">' + x.quizLabel + '</span>'
+        : module === 'math' && /^num_/.test(String(x.id)) ? x.quizLabel
+        : x.quizVisual;
       row.innerHTML = `
-        <div class="lesson-icon">${module === 'letters' ? x.title.replace('字母 ', '') : x.quizVisual}</div>
+        <div class="lesson-icon${String(icon).length > 4 ? ' wide' : ''}">${icon}</div>
         <div class="lesson-main"><b>${x.title}</b><small>${x.sub} · ${done ? '已完成，可无限复习' : '点击开始学习'}</small></div>
         <button class="${done ? 'done' : ''}">${done ? '✓ 再练' : '开始'}</button>`;
       row.querySelector('button').onclick = () => { UI.sfx.pop(); Learn.openStudy(module, x.id); };
@@ -154,14 +165,16 @@ Pages.learn = (el, module) => {
   }
   learnRefresh = () => { paintList(); };
 
-  /* 四 tab：非「学习」直接打开当前课时对应练习弹层 */
+  /* 练习 tab：非「学习」直接打开当前课时对应练习（该课时没有此练习则回退到第一个） */
   el.querySelectorAll('#learnTabs button').forEach(b => b.onclick = () => {
     UI.sfx.tap();
     el.querySelectorAll('#learnTabs button').forEach(x => x.classList.toggle('active', x === b));
     const x = list[curIdx()];
     if (b.dataset.tab === 'learn') return;
+    const want = b.dataset.tab === 'game' ? 'sound' : b.dataset.tab;
+    const kinds = Learn.practicesOf(module, x.id).map(p => p.kind);
     Learn.openStudy(module, x.id);
-    if (b.dataset.tab !== 'learn') Learn.startPractice(b.dataset.tab === 'game' ? 'sound' : b.dataset.tab);
+    Learn.startPractice(kinds.includes(want) ? want : kinds[0]);
   });
 
   el.querySelector('#modPlay').onclick = () => { UI.sfx.pop(); TTS.speak(list[curIdx()].play); };
@@ -400,6 +413,7 @@ Pages.parent = (el, arg, done) => {
         <div class="stat"><b>${st.learned.words}</b><span>已学单词</span></div>
         <div class="stat"><b>${st.learned.hanzi}</b><span>已学汉字</span></div>
         <div class="stat"><b>${st.learned.pinyin}</b><span>已学拼音</span></div>
+        <div class="stat"><b>${st.learned.math || 0}</b><span>已学数学</span></div>
         <div class="stat"><b>${fmtMin}min</b><span>总学习时长</span></div>
       </div></div>
 
@@ -477,7 +491,7 @@ Pages.parent = (el, arg, done) => {
 };
 
 /* ---------- 记录行公用：星级 + 练习名 + 积分 + 日期（评分 1-3 星，旧记录无分按 3） ---------- */
-const PRACTICE_LABEL = { trace: '✍️ 描红', follow: '🎙️ 跟读', sound: '👂 听音识图', match: '🧩 图文配对', game: '👂 听音识图' };
+const PRACTICE_LABEL = { trace: '✍️ 描红', follow: '🎙️ 跟读', sound: '👂 听音识图', match: '🧩 图文配对', quiz: '➗ 口算闯关', game: '👂 听音识图' };
 function starsHtml(n) {
   n = Math.min(3, Math.max(1, n || 3));
   return `<span class="stars">${'★'.repeat(n)}<i>${'★'.repeat(3 - n)}</i></span>`;

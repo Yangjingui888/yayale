@@ -5,8 +5,14 @@
 function TracePad(guide, onDone) {
   const text = String(guide);
   const isCJK = /[\u4e00-\u9fa5]/.test(text);
+  const wide = matchMedia('(min-width: 700px)').matches;   // 与 style.css 大屏断点一致
+  const capFs = wide ? 200 : 158;                          // 单字水印字号上限（.trace-wrap b）
+  const boxW = wide ? 300 : 236;                           // .trace-wrap 边长
   const wrap = document.createElement('div');
-  const sizePx = text.length > 3 ? 'font-size:34px;letter-spacing:1px' : text.length > 1 ? 'font-size:52px' : '';
+  /* 多字符（单词/拼音）先按 0.62em/字符估宽给初值，真实宽由 fitFont 测量后微调 */
+  const multi = text.length > 1;
+  const initFs = multi ? Math.max(24, Math.min(capFs, Math.floor((boxW - 14) / (0.62 * text.length)))) : 0;
+  const sizePx = multi ? `font-size:${initFs}px;letter-spacing:1px` : '';
   wrap.innerHTML = `
     <div class="trace-wrap"><b style="${sizePx}">${text}</b><canvas class="trace-canvas"></canvas></div>
     <div class="trace-tip">沿着浅色字形慢慢描，画完点右下角就好啦</div>
@@ -29,7 +35,8 @@ function TracePad(guide, onDone) {
     const c = off.getContext('2d');
     const st = getComputedStyle(bEl);
     const fs = parseFloat(st.fontSize) || cssW * 0.67;
-    c.font = `${st.fontWeight || 900} ${fs}px -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif`;
+    /* computed 的 font 简写已含字重/字体族/连字特性，与 DOM 水印排版完全一致 */
+    c.font = [st.font, `${st.fontWeight || 900} ${fs}px sans-serif`].find(x => x && x.indexOf(fs + 'px') > 0);
     c.textAlign = 'center'; c.textBaseline = 'middle';
     c.fillStyle = '#000';
     c.fillText(text, off.width / 2, off.height / 2);
@@ -41,12 +48,25 @@ function TracePad(guide, onDone) {
       }
     }
   }
+
+  /* 多字符撑满格子：以单字字号为上限，量出真实墨迹宽后等比缩放到刚好不溢出边框 */
+  function fitFont() {
+    if (!multi) return;
+    const w = box.clientWidth;
+    if (!w) return;                              // 格子尚未布局（隐藏态）时跳过，resize 后重算
+    bEl.style.fontSize = capFs + 'px';
+    const run = bEl.scrollWidth || w;
+    bEl.style.fontSize = Math.max(24, Math.min(capFs, Math.floor(capFs * (w - 14) / run))) + 'px';
+  }
+
   function size() {
+    fitFont();
     const r = box.getBoundingClientRect(), dpr = devicePixelRatio || 1;
     if (!r.width) return;
     cv.width = r.width * dpr; cv.height = r.height * dpr;
-    ctx.lineWidth = Math.max(6, cv.width * 0.04);
-    strokeW = Math.max(6, r.width * 0.04);
+    /* 笔宽不超过字号 12%，小字号长单词下仍能盖住笔画采样点 */
+    strokeW = Math.max(6, Math.min(r.width * 0.04, (parseFloat(getComputedStyle(bEl).fontSize) || r.width * 0.67) * 0.12));
+    ctx.lineWidth = strokeW;
     ctx.lineCap = ctx.lineJoin = 'round';
     ctx.strokeStyle = '#6685ef';
     buildMask(r.width, r.height);
@@ -95,8 +115,8 @@ function TracePad(guide, onDone) {
       }
     }
     const cov = hit / maskPts.length;
-    /* 阈值：单词小字号稍宽；汉字笔画密适度放宽；单字母保持严格 */
-    const t = text.length >= 3 ? [0.60, 0.35] : isCJK ? [0.65, 0.40] : [0.72, 0.45];
+    /* 阈值：长单词笔画细、采样点密，容差稍宽；汉字笔画密适度放宽；单字母保持严格 */
+    const t = text.length >= 7 ? [0.55, 0.32] : text.length >= 3 ? [0.60, 0.35] : isCJK ? [0.65, 0.40] : [0.72, 0.45];
     return cov >= t[0] ? 3 : cov >= t[1] ? 2 : 1;
   }
 
@@ -128,17 +148,34 @@ function TracePad(guide, onDone) {
   cv.addEventListener('pointerlostpointercapture', up);
   wrap.querySelector('[data-act="clear"]').onclick = () => { strokes = []; drawing = false; redraw(); };
   wrap.querySelector('[data-act="ok"]').onclick = () => { UI.sfx.right(); onDone(scoreNow()); };
-  function onResize() {
-    if (!document.body.contains(wrap)) { removeEventListener('resize', onResize); return; }
+  function refit(rescaleInk) {
+    if (!document.body.contains(wrap)) { dispose(); return; }   // 节点已销毁：停止跟随
     const oldW = cv.width;
     size();
-    if (oldW && cv.width !== oldW) {               // 已有笔迹按宽度比例缩放，旋转屏幕不跑位
+    if (rescaleInk && oldW && cv.width !== oldW) {   // 已有笔迹按宽度比例缩放，旋转屏幕不跑位
       const k = cv.width / oldW;
       strokes = strokes.map(st => st.map(pt => ({ x: pt.x * k, y: pt.y * k })));
     }
     redraw();
   }
+  const onResize = () => refit(true);
   addEventListener('resize', onResize);
+  /* 弹层滑入/展开动画期间格子宽度会跳变：跟随重算字号与字形遮罩（不清笔迹、不缩放坐标） */
+  let ro = null;
+  if (window.ResizeObserver) {
+    let lastW = 0;
+    ro = new ResizeObserver(() => {
+      const w = Math.round(box.getBoundingClientRect().width);
+      if (w === lastW) return;                 // 只响应真实宽度变化，高度动画不触发
+      lastW = w;
+      refit(false);
+    });
+    ro.observe(box);
+  }
+  function dispose() {
+    removeEventListener('resize', onResize);
+    if (ro) { ro.disconnect(); ro = null; }
+  }
   setTimeout(size, 30);
   return wrap;
 }
