@@ -26,11 +26,9 @@ const APP = (() => {
     const meBtn = document.getElementById('hudMe');
     if (meBtn && acc) meBtn.textContent = acc.avatar;
     const h = curHash();
-    const showBack = !/^#\/home\/?$/.test(h) && h !== '#/' && h !== '' && !/^#\/me\/?$/.test(h);
-    document.getElementById('hudBack').hidden = !showBack;
-    /* 二级页（非首页）隐藏顶部“芽芽乐”品牌，为内容腾出空间 */
-    const brand = document.querySelector('#hud .brand');
-    if (brand) brand.hidden = showBack;
+    /* 顶部品牌栏（芽芽乐 / ⭐星星 / 🟡积分 / 头像）仅在学习首页显示，其余二级/宠物/家长/个人中心页整体隐藏 */
+    const isHome = /^#\/home\/?$/.test(h) || h === '#/' || h === '';
+    document.getElementById('hud').hidden = !isHome;
     const name = (h.replace(/^#\/?\//, '') || 'home').split('/')[0];
     const tab = TAB_OF[name] || 'study';
     document.querySelectorAll('#tabbar .nav-item').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
