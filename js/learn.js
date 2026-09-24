@@ -332,7 +332,7 @@ const Learn = (() => {
         abortParts.push(() => stream.getTracks().forEach(t => t.stop()));
         startRecognition(stream);
         startVolumeMonitor(stream);
-        micBtn.classList.add('listening'); micBtn.textContent = '🛑';
+        micBtn.classList.add('listening'); micBtn.textContent = '👂';
         step.textContent = '第 2 步：正在录音，大声朗读…';
         result.textContent = '读完后再点一下红色按钮结束';
       }).catch(() => {
