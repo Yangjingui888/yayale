@@ -1,12 +1,14 @@
 /* ============ demo 练习引擎：课时学习弹层 + 四练习任意点选、独立完成、独立发奖、打勾记忆 ============ */
 
-/* 四种练习（demo action-grid 同款顺序与文案） */
-const PRACTICES = [
+/* 五种练习（前四种与 demo 一致；口算闯关为数学模块专用） */
+const PRACTICE_DEFS = [
   { kind: 'trace',  icon: '✍️', label: '描红练习' },
   { kind: 'follow', icon: '🎙️', label: 'AI跟读' },
   { kind: 'sound',  icon: '👂', label: '听音识图' },
   { kind: 'match',  icon: '🧩', label: '图文配对' },
+  { kind: 'quiz',   icon: '➖', label: '口算闯关' },
 ];
+const PRACTICES = PRACTICE_DEFS.filter(p => p.kind !== 'quiz');   // 默认练习集（语言类模块）
 
 const shuffle = a => a.map(x => [Math.random(), x]).sort((p, q) => p[0] - q[0]).map(p => p[1]);
 
@@ -52,6 +54,46 @@ function LESSONS(module) {
       audio: [{ text: `${p[2]}，${p[1]}`, lang: 'zh-CN' }],
       quizVisual: p[3], quizLabel: p[0], quizSub: p[1],
     })));
+  } else if (module === 'math') {
+    /* ① 数字 1-10：认数 → 描中文数字 → 跟读 → 数数配对 */
+    MATH_NUMBERS.forEach((a, i) => list.push({
+      id: 'num_' + i, title: `数字 ${a[0]}`,
+      visual: `<span class="math-num">${a[0]}</span><span class="math-num-cn">${a[1]}</span><span class="math-count">${countEm(a[3], +a[0])}</span>`,
+      sub: `${a[1]} ${a[2]} · ${a[4]} · ${MATH_GROUPS[0].name}`,
+      play: [{ text: `${a[0]}，${a[1]}，${a[4]}`, lang: 'zh-CN' }, { text: a[2], lang: 'en-US' }],
+      follow: { lang: 'zh-CN', target: a[1], demo: `${a[1]}，${a[4]}` },
+      trace: [a[0]],
+      practices: ['trace', 'follow', 'sound', 'match'],
+      quizVisual: countEm(a[3], +a[0]), quizLabel: a[1], quizSub: a[4],
+      audio: [{ text: `${a[1]}，${a[4]}`, lang: 'zh-CN' }],
+      quizGen: () => countQuizOf(a),
+    }));
+    /* ② 100 以内加减法：示范算式 → 跟读算式 → 口算闯关 */
+    MATH_CALC_LEVELS.forEach((lv, i) => list.push({
+      id: 'calc_' + lv.id, title: lv.name,
+      visual: `<span class="math-eq">${lv.ex.f}</span>`,
+      sub: `${lv.tip} · ${MATH_GROUPS[1].name}`,
+      play: lv.ex.play,
+      follow: { lang: 'zh-CN', target: lv.ex.target, demo: lv.ex.target },
+      practices: ['follow', 'quiz'],
+      quizCount: 8,
+      quizVisual: lv.ex.ans, quizLabel: lv.ex.f, quizSub: lv.name,
+      audio: lv.ex.play,
+      quizGen: lv.gen,
+    }));
+    /* ③ 九九乘法表：口诀行 → 跟读口诀 → 口算闯关 */
+    MULT_FACTS.forEach((row, gi) => list.push({
+      id: 'mul_' + row.n, title: row.name,
+      visual: `<span class="mult-table">${row.items.map(f => f.f).join('<br>')}</span>`,
+      sub: `${row.n} 的乘法口诀共 ${row.items.length} 句 · ${MATH_GROUPS[2].name}`,
+      play: row.items[0].play,
+      follow: { lang: 'zh-CN', target: row.items[0].target, demo: row.items[0].target },
+      practices: ['follow', 'quiz'],
+      quizCount: 6,
+      quizVisual: String(row.n), quizLabel: row.name, quizSub: row.n + ' 的口诀',
+      audio: row.items[0].play,
+      quizGen: () => multQuizOf(row),
+    }));
   } else {
     HANZI_GROUPS.forEach((g, gi) => g.items.forEach((h, ii) => list.push({
       id: gi + '_' + ii, title: `汉字 ${h[0]}`,
@@ -70,9 +112,15 @@ function LESSONS(module) {
 function lessonOf(module, index) {
   return LESSONS(module).find(l => String(l.id) === String(index));
 }
-/* 课时整体完成（四练习全打勾） */
+/* 某一课时可用的练习集（数学等模块按内容裁剪） */
+function practicesOf(module, index) {
+  const item = lessonOf(module, index);
+  if (!item || !item.practices) return PRACTICES;
+  return PRACTICE_DEFS.filter(p => item.practices.includes(p.kind));
+}
+/* 课时整体完成（该课时全部练习环节都打勾） */
 function lessonDone(module, index) {
-  return PRACTICES.every(p => Store.practiceDone(module, index, p.kind));
+  return practicesOf(module, index).every(p => Store.practiceDone(module, index, p.kind));
 }
 
 /* ---------- 引擎 ---------- */
@@ -103,7 +151,7 @@ const Learn = (() => {
     return similarity(h, t) >= 0.5 ? 3 : 2;
   }
 
-  const MODULE_NAME = { letters: '字母', words: '单词', pinyin: '拼音', hanzi: '汉字' };
+  const MODULE_NAME = { letters: '字母', words: '单词', pinyin: '拼音', hanzi: '汉字', math: '数学' };
   let clipUrl = null;        // 最近一次跟读录音（仅当次弹层会话内可回听）
 
   function closeSheet() {
@@ -127,11 +175,11 @@ const Learn = (() => {
     renderStudy();
   }
 
-  /* ----- 四段条（active / done✓），点击切换练习 ----- */
+  /* ----- 练习导航条（active / done✓），点击切换练习 ----- */
   function navHtml(active) {
     if (!current) return '';
     const { module, index } = current;
-    return `<div class="practice-nav">${PRACTICES.map(p => {
+    return `<div class="practice-nav">${practicesOf(module, index).map(p => {
       const done = Store.practiceDone(module, index, p.kind);
       return `<button class="${active === p.kind ? 'active' : ''}${done ? ' done' : ''}" data-kind="${p.kind}">${p.icon} ${p.label}${done ? ' ✓' : ''}</button>`;
     }).join('')}</div>`;
@@ -160,7 +208,7 @@ const Learn = (() => {
         <div class="study-sub">${item.sub}</div>
         <button class="play-row" id="studyPlay"><span>🔊 点我听标准发音</span><span class="rp">播放</span></button>
       </div>
-      <div class="action-grid">${PRACTICES.map(p => {
+      <div class="action-grid">${practicesOf(module, index).map(p => {
         const done = Store.practiceDone(module, index, p.kind);
         return `<button class="action-btn${done ? ' practice-done' : ''}" data-kind="${p.kind}">
           <span class="ab-ico">${p.icon}</span><span class="ab-label">${p.label}</span>
@@ -182,6 +230,7 @@ const Learn = (() => {
     TTS.stop();
     if (kind === 'trace') openTrace();
     else if (kind === 'follow') openFollow();
+    else if (kind === 'quiz') openQuiz();
     else openGame(kind);
   }
 
@@ -245,7 +294,7 @@ const Learn = (() => {
     setTimeout(speakDemo, 400);
 
     const clipHost = body.querySelector('#clipHost');
-    let recording = false, abortParts = [], resolved = false;
+    let recording = false, abortParts = [], resolved = false, starting = false;
     let recorder = null, chunks = [], recT0 = 0, rafId = null;
     let heardText = '', spoke = false;
     function releaseStream() { abortParts.forEach(f => { try { f(); } catch (e) {} }); abortParts = []; }
@@ -254,7 +303,10 @@ const Learn = (() => {
 
     function startRecording() {
       UI.sfx.tap();
+      if (starting) return;
+      starting = true;
       navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+        starting = false;
         if (!body.isConnected) { stream.getTracks().forEach(t => t.stop()); return; }
         recording = true; resolved = false; heardText = ''; spoke = false;
         dropClip();
@@ -284,6 +336,7 @@ const Learn = (() => {
         step.textContent = '第 2 步：正在录音，大声朗读…';
         result.textContent = '读完后再点一下红色按钮结束';
       }).catch(() => {
+        starting = false;
         result.textContent = '麦克风不可用，点「我读过啦」也能通过哦';
       });
     }
@@ -300,10 +353,47 @@ const Learn = (() => {
       meter.style.width = '0%';
       if (!wasRecording) { result.textContent = '还没有开始录音哦，先点话筒开始读'; resolved = false; recording = false; return; }
       /* 评分：优先用识别文本，其次依据是否发出过声音（全程正向，不惩罚） */
-      let sc;
-      if (heardText.trim()) sc = scoreFollow(heardText, item.follow.target);
-      else sc = spoke ? 2 : 1;
-      finishPractice('follow', '读得真棒！可以继续选择下一个练习环节', sc);
+      let sc, note;
+      if (heardText.trim()) {
+        sc = scoreFollow(heardText, item.follow.target);
+        note = sc === 3 ? '听得清清楚楚，说得标准又流利 ✨' : '听到了！再贴近示范一点会更棒哦';
+      } else { sc = spoke ? 2 : 1; note = spoke ? '听到了！你的声音真有精神 ✨' : '没有听清呢，可以再读一次，也能直接领奖励'; }
+      showReview(sc, note);
+    }
+
+    /* 回放确认：先听自己读的，由用户点按钮才发分进入下一环节（不自动跳转） */
+    function showReview(sc, note) {
+      step.textContent = '🎧 听听自己读的，满意再领奖励';
+      result.textContent = note;
+      micBtn.style.display = 'none';
+      let box = body.querySelector('#reviewBox');
+      if (!box) {
+        box = document.createElement('div');
+        box.id = 'reviewBox';
+        clipHost.after(box);
+      }
+      box.innerHTML = `<div class="flow-btns" style="margin-top:10px">
+        <button class="primary ghost" id="followRetry">🔁 再读一次</button>
+        <button class="primary" id="followClaim">✅ 完成跟读，领取奖励</button></div>`;
+      box.querySelector('#followRetry').onclick = () => {
+        UI.sfx.tap();
+        box.remove();
+        micBtn.style.display = '';
+        step.textContent = '正在准备麦克风…';
+        result.textContent = '马上开始录音，大声读出来';
+        resolved = false;
+        startRecording();
+      };
+      let awarding = false;
+      box.querySelector('#followClaim').onclick = () => {
+        if (awarding) return;
+        awarding = true;
+        UI.sfx.tap();
+        clipHost.querySelectorAll('audio').forEach(a => { try { a.pause(); } catch (e) {} });
+        box.remove();
+        micBtn.style.display = '';
+        finishPractice('follow', '读得真棒！可以继续选择下一个练习环节', sc);
+      };
     }
 
     micBtn.onclick = () => { recording ? stopAndScore() : startRecording(); };
@@ -371,7 +461,7 @@ const Learn = (() => {
       ? `<div class="quiz-prompt">👂 听一听，哪一个是正确答案？</div>
          <button class="play-row" id="quizPlay"><span>🔊 再听一次</span><span class="rp">播放</span></button>`
       : `<div class="quiz-prompt">🧩 看一看，选出配对的答案</div>
-         <div class="quiz-picture">${item.quizVisual}</div><div class="quiz-label">${item.quizSub}</div>`;
+         <div class="quiz-picture${[...String(item.quizVisual)].length > 6 ? ' math-count' : ''}">${item.quizVisual}</div><div class="quiz-label">${item.quizSub}</div>`;
     const body = practiceShell(kind, `
       <div class="study-card">
         ${prompt}
@@ -408,6 +498,68 @@ const Learn = (() => {
     }
   }
 
+  /* ----- 口算闯关：连答 6~8 题，每题三选一，答错只鼓励不扣分 ----- */
+  function openQuiz() {
+    const { item } = current;
+    const total = item.quizCount || 5;
+    const qs = [];
+    for (let i = 0; i < total; i++) qs.push(item.quizGen());
+    const miss = qs.map(() => 0);
+    let qi = 0;
+    const body = practiceShell('quiz', `
+      <div class="study-card">
+        <div class="quiz-prompt">➗ 口算闯关（<b id="qNo">1</b> / ${total}）</div>
+        <div class="quiz-progress" id="qDots"></div>
+        <div id="qStage"></div>
+      </div>`);
+    const stage = body.querySelector('#qStage');
+    const dots = body.querySelector('#qDots');
+    const sayText = q => [{ text: q.prompt.replace(/[？?]$/, ''), lang: 'zh-CN' }];
+    function paintDots() {
+      dots.textContent = qs.map((_, i) => i < qi ? '★' : i === qi ? '●' : '☆').join(' ');
+    }
+    function renderQ() {
+      const q = qs[qi];
+      body.querySelector('#qNo').textContent = qi + 1;
+      paintDots();
+      const v = String(q.visual);
+      const cls = /\n/.test(v) ? ' math-mult' : v.length > 7 ? ' math-long' : ' math';
+      stage.innerHTML = `
+        <div class="quiz-picture${cls}">${q.visual}</div>
+        <div class="quiz-label">${q.prompt}</div>
+        <button class="play-row play-again" id="qPlay"><span>🔊 再读一遍题</span><span class="rp">播放</span></button>
+        <div class="opts" id="qOpts"></div>`;
+      const opts = stage.querySelector('#qOpts');
+      q.opts.forEach(v => {
+        const b = document.createElement('button');
+        b.className = 'quiz-option';
+        b.innerHTML = `<span class="quiz-word-opt">${v}</span>`;
+        b.onclick = () => {
+          if (b.classList.contains('correct')) return;
+          if (v === q.answer) {
+            b.classList.add('correct'); UI.sfx.right();
+            qi++;
+            setTimeout(() => qi < qs.length ? renderQ() : finish(), 620);
+          } else {
+            miss[qi]++;
+            b.classList.add('wrong'); UI.sfx.wrong();
+            UI.toast('算错一道也没关系，再算一次～');
+            setTimeout(() => b.classList.remove('wrong'), 550);
+          }
+        };
+        opts.appendChild(b);
+      });
+      stage.querySelector('#qPlay').onclick = () => { UI.sfx.pop(); TTS.speak(sayText(q)); };
+      setTimeout(() => TTS.speak(sayText(q)), 350);
+    }
+    function finish() {
+      const m = miss.reduce((a, b) => a + b, 0);
+      const sc = m === 0 ? 3 : m <= Math.ceil(total / 4) ? 2 : 1;
+      finishPractice('quiz', `口算 ${total} 题全答完啦！`, sc);
+    }
+    renderQ();
+  }
+
   /* ----- 完成一个练习：即时发奖（无结算页）+ 打勾 + 解锁检查 ----- */
   function finishPractice(kind, msg, score) {
     const { module, index, item } = current;
@@ -420,7 +572,7 @@ const Learn = (() => {
     Store.recordPractice(module, index, kind, item.title, pt, sc);
     Store.addPoints(pt); Store.addStars(st);
     Store.state.minutes++;
-    if (PRACTICES.every(p => Store.practiceDone(module, index, p.kind))) {
+    if (practicesOf(module, index).every(p => Store.practiceDone(module, index, p.kind))) {
       Store.markCompleted(Store.keyOf(module, index));
     }
     Store.save();
@@ -432,5 +584,5 @@ const Learn = (() => {
     setTimeout(() => UI.checkUnlockCelebration(), 1000);
   }
 
-  return { openStudy, startPractice, closeSheet, lessonDone, LESSONS };
+  return { openStudy, startPractice, closeSheet, lessonDone, LESSONS, practicesOf };
 })();
