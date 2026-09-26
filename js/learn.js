@@ -1,14 +1,15 @@
 /* ============ demo 练习引擎：课时学习弹层 + 四练习任意点选、独立完成、独立发奖、打勾记忆 ============ */
 
-/* 五种练习（前四种与 demo 一致；口算闯关为数学模块专用） */
+/* 六种练习（前四种与 demo 一致；口算闯关为数学专用，成语接龙为成语模块专用） */
 const PRACTICE_DEFS = [
   { kind: 'trace',  icon: '✍️', label: '描红练习' },
   { kind: 'follow', icon: '🎙️', label: 'AI跟读' },
   { kind: 'sound',  icon: '👂', label: '听音识图' },
   { kind: 'match',  icon: '🧩', label: '图文配对' },
   { kind: 'quiz',   icon: '➖', label: '口算闯关' },
+  { kind: 'chain',  icon: '🐉', label: '接龙闯关' },
 ];
-const PRACTICES = PRACTICE_DEFS.filter(p => p.kind !== 'quiz');   // 默认练习集（语言类模块）
+const PRACTICES = PRACTICE_DEFS.filter(p => p.kind !== 'quiz' && p.kind !== 'chain');   // 默认练习集（语言类模块）
 
 const shuffle = a => a.map(x => [Math.random(), x]).sort((p, q) => p[0] - q[0]).map(p => p[1]);
 
@@ -23,10 +24,11 @@ function LESSONS(module) {
       return {
         id: i, title: `字母 ${a.L}`,
         visual: `<span class="dup">${a.L}</span>${a.L.toLowerCase()}`,
+        ipa: a.ph,
         sub: `拼读音 /${a.ph}/ · ${w0[0]} ${w0[1]} · ${w1[0]} ${w1[1]}`,
-        play: [{ text: `${a.L}. ${a.L.toLowerCase()}.`, lang: 'en-US' },
-               { text: `${a.L} says ${a.ph}. ${w0[0]}. ${w1[0]}`, lang: 'en-US' }],
-        follow: { lang: 'en-US', target: w0[0], demo: `${a.L} says ${a.ph}. ${w0[0]}` },
+        /* 发音只读单个字母本名一次，不带拼读音与例词；跟读示范与判分目标同步为字母本名 */
+        play: [{ text: a.L, lang: 'en-US' }],
+        follow: { lang: 'en-US', target: a.L, demo: a.L },
         trace: [a.L, a.L.toLowerCase()],
         audio: [{ text: `${a.L}. ${w0[0]}.`, lang: 'en-US' }],
         quizVisual: w0[2], quizLabel: w0[0], quizSub: w0[1],
@@ -48,10 +50,14 @@ function LESSONS(module) {
       id: gi + '_' + ii, title: `拼音 ${p[0]}`,
       visual: `<span class="dup">${p[0]}</span>`,
       sub: `${p[1]} · ${p[2]} · ${g.name}`,
-      play: [{ text: `${p[1]}，${p[2]}`, lang: 'zh-CN' }],
+      /* 标准发音：先慢速单独读准音字（自然音高），再带一次音→词巩固，避免连读句子导致读音不标准 */
+      play: [{ text: p[1], lang: 'zh-CN', rate: 0.7, pitch: 1 },
+             { text: `${p[1]}，${p[2]}`, lang: 'zh-CN', rate: 0.8, pitch: 1 }],
+      tones: (typeof PINYIN_TONES !== 'undefined' ? PINYIN_TONES[p[0]] : null) || null,
       follow: { lang: 'zh-CN', target: p[2], demo: `${p[1]}，${p[2]}` },
       trace: [p[0]],
-      audio: [{ text: `${p[2]}，${p[1]}`, lang: 'zh-CN' }],
+      audio: [{ text: p[1], lang: 'zh-CN', rate: 0.7, pitch: 1 },
+              { text: p[2], lang: 'zh-CN', rate: 0.8, pitch: 1 }],
       quizVisual: p[3], quizLabel: p[0], quizSub: p[1],
     })));
   } else if (module === 'math') {
@@ -60,7 +66,7 @@ function LESSONS(module) {
       id: 'num_' + i, title: `数字 ${a[0]}`,
       visual: `<span class="math-num">${a[0]}</span><span class="math-num-cn">${a[1]}</span><span class="math-count">${countEm(a[3], +a[0])}</span>`,
       sub: `${a[1]} ${a[2]} · ${a[4]} · ${MATH_GROUPS[0].name}`,
-      play: [{ text: `${a[0]}，${a[1]}，${a[4]}`, lang: 'zh-CN' }, { text: a[2], lang: 'en-US' }],
+      play: [{ text: `${a[0]}，${a[1]}，${a[4]}`, lang: 'zh-CN' }],
       follow: { lang: 'zh-CN', target: a[1], demo: `${a[1]}，${a[4]}` },
       trace: [a[0]],
       practices: ['trace', 'follow', 'sound', 'match'],
@@ -86,7 +92,7 @@ function LESSONS(module) {
       id: 'mul_' + row.n, title: row.name,
       visual: `<span class="mult-table">${row.items.map(f => f.f).join('<br>')}</span>`,
       sub: `${row.n} 的乘法口诀共 ${row.items.length} 句 · ${MATH_GROUPS[2].name}`,
-      play: row.items[0].play,
+      play: row.items.flatMap(it => it.play),
       follow: { lang: 'zh-CN', target: row.items[0].target, demo: row.items[0].target },
       practices: ['follow', 'quiz'],
       quizCount: 6,
@@ -94,17 +100,40 @@ function LESSONS(module) {
       audio: row.items[0].play,
       quizGen: () => multQuizOf(row),
     }));
+  } else if (module === 'chengyu') {
+    /* 成语接龙：每字为龙头一课时，学习卡展示整条链，练习 = 描龙字 + 跟读龙头成语 + 接龙闯关 */
+    CHENGYU_GROUPS.forEach((g, gi) => g.chars.forEach((ch, ii) => {
+      const chain = CHENGYU_CHAINS[ch] || [];
+      const first = chain[0];
+      list.push({
+        id: gi + '_' + ii, title: `成语接龙 ${ch}`,
+        visual: `<span class="dup">${ch}</span>`,
+        sub: `${g.em} ${g.name} · 以「${ch}」为龙头接 12 条成语`,
+        chain: chain,
+        /* 上方按钮连播整条接龙：逐条只读成语本身（每条独立一段，自然停顿、可被新播放取代），不读释义 */
+        play: chain.map(x => ({ text: x[0], lang: 'zh-CN' })),
+        follow: { lang: 'zh-CN', target: first[0], demo: first[0] },
+        trace: [ch],
+        practices: ['trace', 'follow', 'chain'],
+        audio: [{ text: first[0], lang: 'zh-CN' }],
+        quizVisual: g.em, quizLabel: ch, quizSub: first[0],
+      });
+    }));
   } else {
-    HANZI_GROUPS.forEach((g, gi) => g.items.forEach((h, ii) => list.push({
-      id: gi + '_' + ii, title: `汉字 ${h[0]}`,
-      visual: h[0],
-      sub: `${h[1]} · ${h[2]} · ${g.name}`,
-      play: [{ text: `${h[0]}。${h[2]}。`, lang: 'zh-CN' }],
-      follow: { lang: 'zh-CN', target: h[2], demo: `${h[0]}，${h[2]}` },
-      trace: [h[0]],
-      audio: [{ text: `${h[2]}，${h[0]}`, lang: 'zh-CN' }],
-      quizVisual: h[3], quizLabel: h[0], quizSub: h[2],
-    })));
+    HANZI_GROUPS.forEach((g, gi) => g.items.forEach((h, ii) => {
+      const words = h[2];
+      list.push({
+        id: gi + '_' + ii, title: `汉字 ${h[0]}`,
+        visual: h[0],
+        sub: `${h[1]} · ${g.name}`,
+        words: words,
+        play: [{ text: `${h[0]}。${words.map(w => w[0]).join('。')}。`, lang: 'zh-CN' }],
+        follow: { lang: 'zh-CN', target: words[0][0], demo: `${h[0]}，${words[0][0]}` },
+        trace: [h[0]],
+        audio: [{ text: `${words[0][0]}，${h[0]}`, lang: 'zh-CN' }],
+        quizVisual: h[3], quizLabel: h[0], quizSub: words[0][0],
+      });
+    }));
   }
   LESSON_CACHE[module] = list;
   return list;
@@ -151,7 +180,7 @@ const Learn = (() => {
     return similarity(h, t) >= 0.5 ? 3 : 2;
   }
 
-  const MODULE_NAME = { letters: '字母', words: '单词', pinyin: '拼音', hanzi: '汉字', math: '数学' };
+  const MODULE_NAME = { letters: '字母', words: '单词', pinyin: '拼音', hanzi: '汉字', math: '数学', chengyu: '成语接龙' };
   let clipUrl = null;        // 最近一次跟读录音（仅当次弹层会话内可回听）
 
   function closeSheet() {
@@ -191,6 +220,23 @@ const Learn = (() => {
   }
 
   /* ----- 「学习」总览：study-card + action-grid 四按钮 ----- */
+  const TONE_MARKS = ['ˉ', 'ˊ', 'ˇ', 'ˋ'];   // 四声调号
+  function renderToneRow(body, module, item) {
+    if (module !== 'pinyin' || !item.tones || item.tones.length !== 4) return;
+    const card = body.querySelector('.study-card');
+    if (!card) return;
+    const row = document.createElement('div');
+    row.className = 'tone-row';
+    row.innerHTML = `<span class="tone-label">🔤 声调</span>` + item.tones.map((ch, k) =>
+      `<button class="tone-btn" data-tone="${k}"><b>${TONE_MARKS[k]}</b><span>${ch}</span><small>${'一二三四'[k]}声</small></button>`).join('');
+    card.appendChild(row);
+    row.querySelectorAll('.tone-btn').forEach(b => b.onclick = () => {
+      UI.sfx.pop();
+      /* 四声单字：慢速 + 自然音高，声调读得更准更清楚 */
+      TTS.speak({ text: item.tones[+b.dataset.tone], lang: 'zh-CN', rate: 0.7, pitch: 1 });
+    });
+  }
+
   function renderStudy() {
     if (!current) return;
     if (micCleanup) { micCleanup(); micCleanup = null; }
@@ -206,8 +252,10 @@ const Learn = (() => {
         <div class="study-visual">${item.visual}</div>
         <div class="study-word">${item.title}</div>
         <div class="study-sub">${item.sub}</div>
-        <button class="play-row" id="studyPlay"><span>🔊 点我听标准发音</span><span class="rp">播放</span></button>
+        ${module === 'hanzi' && item.words ? `<div class="hanzi-words study-hz-words">${item.words.map((w, wi) => `<button class="hw-chip" data-w="${wi}"><span class="hw-py">${w[1]}</span><span class="hw-word">${w[0]}</span></button>`).join('')}</div>` : ''}
+        <button class="play-row" id="studyPlay"><span>${module === 'chengyu' ? '🔊 点我听本次 12 条成语接龙' : '🔊 点我听标准发音'}</span><span class="rp">播放</span></button>
       </div>
+      ${module === 'chengyu' && item.chain ? `<div class="chain-list">${item.chain.map((x, ci) => `<button class="chain-row" data-c="${ci}"><span class="chain-no">${ci + 1}</span><span class="chain-cy">${x[0]}<small>${x[1]}</small></span><span class="chain-mean">${x[2]}</span>${x[3] ? `<em class="chain-note">${x[3]}</em>` : ''}<span class="chain-play" aria-label="播放这条成语">🔊</span></button>`).join('')}</div>` : ''}
       <div class="action-grid">${practicesOf(module, index).map(p => {
         const done = Store.practiceDone(module, index, p.kind);
         return `<button class="action-btn${done ? ' practice-done' : ''}" data-kind="${p.kind}">
@@ -220,9 +268,17 @@ const Learn = (() => {
     });
     bindNav(body);
     document.getElementById('studyPlay').onclick = () => { UI.sfx.pop(); TTS.speak(item.play); };
+    body.querySelectorAll('.study-hz-words .hw-chip').forEach(c => c.onclick = () => { UI.sfx.tap(); const w = item.words[+c.dataset.w]; TTS.speak([{ text: w[0], lang: 'zh-CN' }]); });
+    body.querySelectorAll('.chain-row').forEach(r => r.onclick = () => {
+      const x = item.chain[+r.dataset.c]; UI.sfx.pop();
+      /* 播放中高亮该行，让用户看到反馈；被新播放取代也会清理 */
+      body.querySelectorAll('.chain-row.chain-playing').forEach(o => o.classList.remove('chain-playing'));
+      r.classList.add('chain-playing');
+      Promise.resolve(TTS.speak({ text: x[0], lang: 'zh-CN' })).finally(() => r.classList.remove('chain-playing'));
+    });
     const recToggle = body.querySelector('#recToggle');
     if (recToggle) recToggle.onclick = () => { UI.sfx.tap(); const rl = body.querySelector('#recList'); rl.hidden = !rl.hidden; };
-    setTimeout(() => TTS.speak(item.play), 500);
+    renderToneRow(body, module, item);
   }
 
   function startPractice(kind) {
@@ -231,6 +287,7 @@ const Learn = (() => {
     if (kind === 'trace') openTrace();
     else if (kind === 'follow') openFollow();
     else if (kind === 'quiz') openQuiz();
+    else if (kind === 'chain') openChain();
     else openGame(kind);
   }
 
@@ -556,6 +613,73 @@ const Learn = (() => {
       const m = miss.reduce((a, b) => a + b, 0);
       const sc = m === 0 ? 3 : m <= Math.ceil(total / 4) ? 2 : 1;
       finishPractice('quiz', `口算 ${total} 题全答完啦！`, sc);
+    }
+    renderQ();
+  }
+
+  /* ----- 接龙闯关：给出前一条成语，三选一接下一条（6 题，答错只鼓励） ----- */
+  function openChain() {
+    const { module, index, item } = current;
+    const chain = item.chain;
+    /* 干扰项池：全链条去重成语 */
+    const pool = [];
+    Object.keys(CHENGYU_CHAINS).forEach(c => CHENGYU_CHAINS[c].forEach(x => { if (pool.every(y => y[0] !== x[0])) pool.push(x); }));
+    const links = [];
+    for (let i = 0; i < chain.length - 1; i++) links.push(i);
+    const total = Math.min(6, links.length);
+    const qs = shuffle(links).slice(0, total).sort((a, b) => a - b).map(i => {
+      const prev = chain[i], right = chain[i + 1];
+      const tail = prev[0][prev[0].length - 1];
+      const distract = shuffle(pool.filter(x => x[0] !== right[0] && x[0][0] !== tail && x[0][0] !== right[0][0])).slice(0, 2);
+      return { prev, right, opts: shuffle([right, ...distract]) };
+    });
+    const miss = qs.map(() => 0);
+    let qi = 0;
+    const body = practiceShell('chain', `
+      <div class="study-card">
+        <div class="quiz-prompt">🐉 成语接龙闯关（<b id="cNo">1</b> / ${total}）</div>
+        <div class="quiz-progress" id="cDots"></div>
+        <div id="cStage"></div>
+      </div>`);
+    const stage = body.querySelector('#cStage');
+    const dots = body.querySelector('#cDots');
+    function paintDots() { dots.textContent = qs.map((_, i) => i < qi ? '★' : i === qi ? '●' : '☆').join(' '); }
+    function renderQ() {
+      const q = qs[qi];
+      body.querySelector('#cNo').textContent = qi + 1;
+      paintDots();
+      stage.innerHTML = `
+        <div class="chain-prev">「${q.prev[0]}」的下一个成语是什么？</div>
+        <button class="play-row play-again" id="cPlay"><span>🔊 再读一遍题</span><span class="rp">播放</span></button>
+        <div class="opts" id="cOpts"></div>`;
+      const opts = stage.querySelector('#cOpts');
+      q.opts.forEach(o => {
+        const b = document.createElement('button');
+        b.className = 'quiz-option';
+        b.innerHTML = `<span class="quiz-word-opt">${o[0]}</span><small class="opt-py">${o[1]}</small>`;
+        b.onclick = () => {
+          if (b.classList.contains('correct')) return;
+          if (o === q.right) {
+            b.classList.add('correct'); UI.sfx.right();
+            qi++;
+            setTimeout(() => qi < qs.length ? renderQ() : finish(), 620);
+          } else {
+            miss[qi]++;
+            b.classList.add('wrong'); UI.sfx.wrong();
+            UI.toast('听一听首字，再试一次～');
+            setTimeout(() => b.classList.remove('wrong'), 550);
+          }
+        };
+        opts.appendChild(b);
+      });
+      const sayText = () => ({ text: `${q.prev[0]}。下一个成语是：${q.right[0]}`, lang: 'zh-CN' });
+      stage.querySelector('#cPlay').onclick = () => { UI.sfx.pop(); TTS.speak(sayText()); };
+      setTimeout(() => TTS.speak(sayText()), 350);
+    }
+    function finish() {
+      const m = miss.reduce((a, b) => a + b, 0);
+      const sc = m === 0 ? 3 : m <= Math.ceil(total / 3) ? 2 : 1;
+      finishPractice('chain', `接龙 ${total} 题全接完啦，你也是接龙小高手！`, sc);
     }
     renderQ();
   }

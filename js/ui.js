@@ -28,6 +28,13 @@ const UI = (() => {
     feed: () => { tone(500, 0, .08, 'triangle'); tone(700, .08, .12, 'triangle'); },
   };
 
+  /* ---------- token 消费入口：JS 侧取 :root 语义色，禁止再私建重复色字典 ---------- */
+  const _tokenCache = {};
+  function token(name) {
+    if (_tokenCache[name]) return _tokenCache[name];
+    return _tokenCache[name] = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  }
+
   /* ---------- Toast（底部深蓝胶囊） ---------- */
   function toast(msg) {
     const layer = document.getElementById('toastLayer');
@@ -59,7 +66,7 @@ const UI = (() => {
   function burst(n = 120) {
     if (!Store.state.motion) return;
     const dpr = devicePixelRatio;
-    const colors = ['#ffd86f', '#ffb1b9', '#a5ead1', '#8fb8ff', '#c5b8ff'];
+    const colors = ['--yellow', '--pink', '--mint', '--fx-sky', '--fx-lilac'].map(token);
     const chars = ['⭐', '🎉', '✨', '🌟', '', '●'];
     for (let i = 0; i < n; i++) {
       parts.push({
@@ -149,5 +156,5 @@ const UI = (() => {
     panel.appendChild(btn);
   }
 
-  return { sfx, toast, dialog, burst, glowFlash, cheer, cheerNear, checkUnlockCelebration };
+  return { sfx, toast, dialog, burst, glowFlash, cheer, cheerNear, checkUnlockCelebration, token };
 })();

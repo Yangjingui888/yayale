@@ -6,6 +6,7 @@ function openSheet(html, opts) {
   const d = UI.dialog(html, opts);
   const x = d.el.querySelector('[data-x="hide"]');
   if (x) x.onclick = () => { UI.sfx.tap(); d.close(); };
+  decoratePasswordInputs(d.el);
   return d;
 }
 
@@ -53,9 +54,10 @@ Pages.home = (el) => {
     <div class="modules">
       <button class="module m-blue" data-go="#/learn/letters"><em>英语</em><b>字母乐园</b><small>听一听 · 读一读</small><span class="ico">🔤</span></button>
       <button class="module m-pink" data-go="#/learn/words"><em>英语</em><b>单词乐园</b><small>看图学单词</small><span class="ico">🍎</span></button>
-      <button class="module m-yellow" data-go="#/learn/hanzi"><em>汉字</em><b>汉字小课堂</b><small>描一描 · 认一认</small><span class="ico">🖌️</span></button>
+      <button class="module m-lavender" data-go="#/learn/hanzi"><em>汉字</em><b>汉字小课堂</b><small>描一描 · 认一认</small><span class="ico">🖌️</span></button>
       <button class="module m-green" data-go="#/learn/pinyin"><em>拼音</em><b>拼音小火车</b><small>听音来拼读</small><span class="ico">🚂</span></button>
-      <button class="module m-purple" data-go="#/learn/math"><em>数学</em><b>数学乐园</b><small>数数 · 口算 · 口诀</small><span class="ico">🔢</span></button>
+      <button class="module m-orange" data-go="#/learn/math"><em>数学</em><b>数学乐园</b><small>数数 · 口算 · 口诀</small><span class="ico">🔢</span></button>
+      <button class="module m-rose" data-go="#/learn/chengyu"><em>成语</em><b>成语接龙</b><small>《登鹳雀楼》20 字龙头</small><span class="ico">🐉</span></button>
     </div>
 
     <div class="progress-card">
@@ -87,12 +89,13 @@ Pages.home = (el) => {
 const LEARN_META = {
   letters: { title: '字母乐园', sub: '跟着小伙伴，一起开口读 · 26 个字母', emoji: '🦊', grad: 'g-blue', steps: '发音认知 → 描红练习 → AI跟读 → 小游戏闯关', filters: ['A-Z', '已学', '待学习'] },
   words:   { title: '单词乐园', sub: '看图识词 · 8 大主题', emoji: '🍎', grad: 'g-pink', steps: '看图认词 → 描红练习 → AI跟读 → 小游戏闯关', filters: null },
-  hanzi:   { title: '汉字小课堂', sub: '描一描 · 认一认 · 8 组常用字', emoji: '🖌️', grad: 'g-yellow', steps: '字形认知 → 描红练习 → AI跟读 → 小游戏闯关', filters: null },
+  hanzi:   { title: '汉字小课堂', sub: '描一描 · 认一认 · 8 组常用字', emoji: '🖌️', grad: 'g-lavender', steps: '字形认知 → 描红练习 → AI跟读 → 小游戏闯关', filters: null },
   pinyin:  { title: '拼音小火车', sub: '听音来拼读 · 声母韵母', emoji: '🚂', grad: 'g-green', steps: '拼音认知 → 描红练习 → AI跟读 → 小游戏闯关', filters: null },
-  math:    { title: '数学乐园', sub: '数数 · 100 以内加减 · 九九乘法表', emoji: '🔢', grad: 'g-grape', steps: '数字认知 → 描一描数字 → 开口认算式 → 口算闯关', filters: null },
+  math:    { title: '数学乐园', sub: '数数 · 100 以内加减 · 九九乘法表', emoji: '🔢', grad: 'g-orange', steps: '数字认知 → 描一描数字 → 开口认算式 → 口算闯关', filters: null },
+  chengyu: { title: '成语接龙', sub: '《登鹳雀楼》20 字龙头 · 每字 12 条成语', emoji: '🐉', grad: 'g-rose', steps: '读整条接龙链 → 描红龙字 → AI跟读成语 → 接龙闯关', filters: null },
 };
-/* 学习页顶部四个入口 tab（数学等模块按课时练习集自动回退） */
-const LEARN_TABS = [['trace', '描红'], ['follow', 'AI跟读'], ['sound', '小游戏']];
+/* 学习页顶部入口 tab（数学等模块按课时练习集自动回退） */
+const LEARN_TABS = [['trace', '描红'], ['follow', 'AI跟读'], ['sound', '小游戏'], ['chain', '接龙']];
 
 Pages.learn = (el, module) => {
   if (!LEARN_META[module]) return location.hash = '#/home';
@@ -100,7 +103,8 @@ Pages.learn = (el, module) => {
   const filters = meta.filters || ['全部'].concat(
     module === 'words' ? WORD_THEMES.map(t => t.name) :
     module === 'pinyin' ? PINYIN_GROUPS.map(g => g.name) :
-    module === 'math' ? MATH_GROUPS.map(g => g.name) : HANZI_GROUPS.map(g => g.name));
+    module === 'math' ? MATH_GROUPS.map(g => g.name) :
+    module === 'chengyu' ? CHENGYU_GROUPS.map(g => g.em + ' ' + g.name) : HANZI_GROUPS.map(g => g.name));
   let fi = 0;
   el.innerHTML = `
     <div class="sub-top back-row"><button class="back" id="pgBack">‹</button>
@@ -112,7 +116,7 @@ Pages.learn = (el, module) => {
     </div>
     <div class="lesson-filter" id="flt"></div>
     <div class="lesson-list" id="lessonList"></div>
-    <button class="play-row" id="modPlay" style="width:100%;margin-top:12px"><span>🔊 点我听当前模块标准发音</span><span class="rp">播放声音</span></button>`;
+    <button class="play-row" id="modPlay" style="width:100%;margin-top:12px"><span>🔊 ${module === 'chengyu' ? '点我听当前课时的成语接龙' : '点我听当前模块标准发音'}</span><span class="rp">播放声音</span></button>`;
   el.querySelector('#pgBack').onclick = () => { TTS.stop(); location.hash = '#/home'; };
 
   /* 当前课时：第一个未整体完成的行 */
@@ -123,6 +127,7 @@ Pages.learn = (el, module) => {
     if (module === 'words') return WORD_THEMES[+String(x.id).split('_')[0]].name;
     if (module === 'pinyin') return PINYIN_GROUPS[+String(x.id).split('_')[0]].name;
     if (module === 'hanzi') return HANZI_GROUPS[+String(x.id).split('_')[0]].name;
+    if (module === 'chengyu') return CHENGYU_GROUPS[+String(x.id).split('_')[0]].em + ' ' + CHENGYU_GROUPS[+String(x.id).split('_')[0]].name;
     if (module === 'math') {
       const id = String(x.id);
       return MATH_GROUPS[/^num_/.test(id) ? 0 : /^calc_/.test(id) ? 1 : 2].name;
@@ -152,13 +157,17 @@ Pages.learn = (el, module) => {
       row.className = 'lesson';
       const icon = module === 'letters' ? x.title.replace('字母 ', '')
         : module === 'pinyin' ? '<span class="dup">' + x.quizLabel + '</span>'
+        : module === 'chengyu' ? '<span class="dup">' + x.quizLabel + '</span>'
         : module === 'math' && /^num_/.test(String(x.id)) ? x.quizLabel
         : x.quizVisual;
+      const ipaBadge = module === 'letters' && x.ipa ? `<small class="lesson-ipa">/${x.ipa}/</small>` : '';
+      const wordChips = (module === 'hanzi' && x.words) ? `<div class="hanzi-words">${x.words.map((w, wi) => `<button class="hw-chip" data-w="${wi}"><span class="hw-py">${w[1]}</span><span class="hw-word">${w[0]}</span></button>`).join('')}</div>` : '';
       row.innerHTML = `
         <div class="lesson-icon${String(icon).length > 4 ? ' wide' : ''}">${icon}</div>
-        <div class="lesson-main"><b>${x.title}</b><small>${x.sub} · ${done ? '已完成，可无限复习' : '点击开始学习'}</small></div>
-        <button class="${done ? 'done' : ''}">${done ? '✓ 再练' : '开始'}</button>`;
-      row.querySelector('button').onclick = () => { UI.sfx.pop(); Learn.openStudy(module, x.id); };
+        <div class="lesson-main"><b>${x.title}${ipaBadge}</b><small>${x.sub} · ${done ? '已完成，可无限复习' : '点击开始学习'}</small>${wordChips}</div>
+        <button class="lesson-go${done ? ' done' : ''}">${done ? '✓ 再练' : '开始'}</button>`;
+      row.querySelector('.lesson-go').onclick = () => { UI.sfx.pop(); Learn.openStudy(module, x.id); };
+      if (module === 'hanzi' && x.words) row.querySelectorAll('.hw-chip').forEach(c => c.onclick = (e) => { e.stopPropagation(); UI.sfx.tap(); const w = x.words[+c.dataset.w]; TTS.speak([{ text: w[0], lang: 'zh-CN' }]); });
       lst.appendChild(row);
     });
     if (!lst.children.length) lst.innerHTML = '<p class="study-sub" style="text-align:center;padding:18px">这一类全都练过啦，真棒！换个分类看看吧</p>';
@@ -173,6 +182,7 @@ Pages.learn = (el, module) => {
     if (b.dataset.tab === 'learn') return;
     const want = b.dataset.tab === 'game' ? 'sound' : b.dataset.tab;
     const kinds = Learn.practicesOf(module, x.id).map(p => p.kind);
+    if (want === 'chain' && !kinds.includes('chain')) { UI.toast('接龙闯关在「成语接龙」模块里哦'); el.querySelectorAll('#learnTabs button').forEach(y => y.classList.toggle('active', y.dataset.tab === 'learn')); return; }
     Learn.openStudy(module, x.id);
     Learn.startPractice(kinds.includes(want) ? want : kinds[0]);
   });
@@ -320,7 +330,7 @@ Pages.pet = (el, arg) => {
           <div class="sheet-item-main"><b>${p.food[0]} · ${p.food[1]}</b><small>现有 ${Store.foodCount(idx)} 个（上限 ${ECON.foodCap}）</small></div>
           <button class="buy" id="doBuy">${atCap ? '已满' : `🟡${ECON.foodPrice}<br>购买`}</button>
         </div>
-        <p class="study-sub" style="margin-top:12px">可用积分：<b style="color:#5875dc">🟡${Store.state.points}</b>（购买只扣积分，不影响累计解锁进度）`);
+        <p class="study-sub" style="margin-top:12px">可用积分：<b class="t-points">🟡${Store.state.points}</b>（购买只扣积分，不影响累计解锁进度）`);
       d.el.querySelector('#doBuy').onclick = () => {
         if (atCap) return;
         if (!Store.spendPoints(ECON.foodPrice)) {
@@ -414,6 +424,7 @@ Pages.parent = (el, arg, done) => {
         <div class="stat"><b>${st.learned.hanzi}</b><span>已学汉字</span></div>
         <div class="stat"><b>${st.learned.pinyin}</b><span>已学拼音</span></div>
         <div class="stat"><b>${st.learned.math || 0}</b><span>已学数学</span></div>
+        <div class="stat"><b>${st.learned.chengyu || 0}</b><span>已学接龙</span></div>
         <div class="stat"><b>${fmtMin}min</b><span>总学习时长</span></div>
       </div></div>
 
@@ -433,11 +444,11 @@ Pages.parent = (el, arg, done) => {
         <button class="switch ${s.motion ? 'on' : ''}" id="motionSwitch"><i></i></button></div>
       <div class="setting"><div>纯净模式<small>无广告 · 无外部跳转 · 正向鼓励</small></div>
         <button class="switch ${s.clean ? 'on' : ''}" id="cleanSwitch"><i></i></button></div>
-      <button class="primary" style="margin-top:14px;background:#f0f3f8;color:#8290a4" id="rstBtn">重置本机体验数据</button>
+      <button class="primary btn-soft" style="margin-top:14px" id="rstBtn">重置本机体验数据</button>
     </div>
 
     <div class="parent-card"><h3>💾 存档备份（换设备时迁移）</h3>
-      <p style="font-size:11px;color:#8b98aa;margin-bottom:10px">导出存档码保存到安全的地方，在新设备粘贴即可恢复。</p>
+      <p class="t-hint" style="margin-bottom:10px">导出存档码保存到安全的地方，在新设备粘贴即可恢复。</p>
       <div class="data-btns">
         <button class="data-btn d-export" id="exp"><span class="db-em">📤</span>导出存档码</button>
         <button class="data-btn d-import" id="imp"><span class="db-em">📥</span>导入存档码</button>
@@ -466,7 +477,7 @@ Pages.parent = (el, arg, done) => {
     const d = openSheet(`<div class="sheet-head"><h3>⚠️ 确认重置？</h3><button class="close" data-x="hide">×</button></div>
       <p class="study-sub">将清空所有学习进度、星星、积分和宠物养成数据，无法恢复</p>
       <div class="btns"><button class="primary ghost" data-x="no">取消</button>
-        <button class="primary" data-x="yes" style="background:#ef7b7b">确认重置</button></div>`);
+        <button class="primary btn-danger" data-x="yes">确认重置</button></div>`);
     d.el.querySelector('[data-x="no"]').onclick = () => d.close();
     d.el.querySelector('[data-x="yes"]').onclick = () => { Store.reset(); d.close(); UI.toast('已重置'); setTimeout(() => location.hash = '#/home', 500); };
   };
@@ -492,6 +503,32 @@ Pages.parent = (el, arg, done) => {
 
 /* ---------- 记录行公用：星级 + 练习名 + 积分 + 日期（评分 1-3 星，旧记录无分按 3） ---------- */
 const PRACTICE_LABEL = { trace: '✍️ 描红', follow: '🎙️ 跟读', sound: '👂 听音识图', match: '🧩 图文配对', quiz: '➗ 口算闯关', game: '👂 听音识图' };
+/* 密码框统一加「显示/隐藏」小眼睛：给 type=password 输入包一层 wrap 并挂切换按钮 */
+function decoratePasswordInputs(root) {
+  (root || document).querySelectorAll('input[type="password"]').forEach(decoratePwdInput);
+}
+function decoratePwdInput(inp) {
+  if (inp.dataset.pwdDeco) return;
+  inp.dataset.pwdDeco = '1';
+  const wrap = document.createElement('span');
+  wrap.className = 'pwd-wrap';
+  inp.parentNode.insertBefore(wrap, inp);
+  wrap.appendChild(inp);
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'pwd-eye';
+  btn.setAttribute('aria-label', '显示密码');
+  btn.innerHTML = '<svg class="pw-hide" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg><svg class="pw-show" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/><path d="M4 20L20 4"/></svg>';
+  btn.onclick = () => {
+    const show = inp.type === 'password';
+    inp.type = show ? 'text' : 'password';
+    btn.classList.toggle('showing', show);
+    btn.setAttribute('aria-label', show ? '隐藏密码' : '显示密码');
+    UI.sfx.tap();
+  };
+  wrap.appendChild(btn);
+}
+
 function starsHtml(n) {
   n = Math.min(3, Math.max(1, n || 3));
   return `<span class="stars">${'★'.repeat(n)}<i>${'★'.repeat(3 - n)}</i></span>`;
@@ -529,6 +566,7 @@ Pages.login = (el) => {
           <div class="form-err" id="loginErr" hidden></div>
         </div>
       </div>`;
+    decoratePasswordInputs(el);
     el.querySelectorAll('.login-tabs button').forEach(b => b.onclick = () => { UI.sfx.tap(); mode = b.dataset.m; draw(); });
     el.querySelectorAll('.avatar-grid button').forEach(b => b.onclick = () => {
       pickedAvatar = b.dataset.a;
@@ -600,6 +638,8 @@ Pages.me = (el) => {
 
       <div class="parent-card"><button class="primary warn" id="logoutBtn" style="width:100%">退出登录</button></div>`;
 
+    decoratePasswordInputs(el);
+
     el.querySelector('#pgBack').onclick = () => { TTS.stop(); location.hash = '#/home'; };
     let picked = a.avatar;
     el.querySelectorAll('.avatar-grid button').forEach(b => b.onclick = () => {
@@ -620,7 +660,7 @@ Pages.me = (el) => {
       el.querySelectorAll('[data-reset]').forEach(b => b.onclick = () => {
         const target = b.dataset.reset;
         const d = openSheet(`<div class="sheet-head"><h3>重置「${target}」的密码</h3><button class="close" data-x="hide">×</button></div>
-          <label class="fld"><span>新密码（至少 4 位）</span><input id="np" type="text"></label>
+          <label class="fld"><span>新密码（至少 4 位）</span><input id="np" type="password" autocomplete="new-password"></label>
           <div class="btns"><button class="primary" data-x="ok">确认重置</button></div>`);
         d.el.querySelector('[data-x="ok"]').onclick = async () => {
           const r = await Auth.resetPasswordByAdmin(target, d.el.querySelector('#np').value);
@@ -632,7 +672,7 @@ Pages.me = (el) => {
         const target = b.dataset.del;
         const d = openSheet(`<div class="sheet-head"><h3>删除账号 ${target}？</h3><button class="close" data-x="hide">×</button></div>
           <p class="study-sub">它的本机学习存档会一起删除，无法恢复</p>
-          <div class="btns"><button class="primary ghost" data-x="no">取消</button><button class="primary" data-x="yes" style="background:#ef7b7b">确认删除</button></div>`);
+          <div class="btns"><button class="primary ghost" data-x="no">取消</button><button class="primary btn-danger" data-x="yes">确认删除</button></div>`);
         d.el.querySelector('[data-x="no"]').onclick = () => d.close();
         d.el.querySelector('[data-x="yes"]').onclick = () => {
           const r = Auth.deleteUser(target);

@@ -10,7 +10,7 @@ const Store = (() => {
     lifetimePoints: 0,      // 累计积分（解锁依据，只增不减）
     completed: [],          // 已完成的课时 key（首次通关判定）
     practiceRecords: [],    // 练习记录（近 500 条，带 1-3 星评分，练习打勾依据）
-    learned: { letters: 0, words: 0, hanzi: 0, pinyin: 0, math: 0 },
+    learned: { letters: 0, words: 0, hanzi: 0, pinyin: 0, math: 0, chengyu: 0 },
     minutes: 0,             // 总学习分钟（completeTask +1，兼容 tick 秒表）
     seconds: 0,
     timer: 10,              // 防沉迷分钟（demo 默认 10；0=不限）

@@ -68,7 +68,7 @@ function TracePad(guide, onDone) {
     strokeW = Math.max(6, Math.min(r.width * 0.04, (parseFloat(getComputedStyle(bEl).fontSize) || r.width * 0.67) * 0.12));
     ctx.lineWidth = strokeW;
     ctx.lineCap = ctx.lineJoin = 'round';
-    ctx.strokeStyle = '#6685ef';
+    ctx.strokeStyle = UI.token('--trace-ink') || '#6685ef';
     buildMask(r.width, r.height);
   }
   function redraw() {
