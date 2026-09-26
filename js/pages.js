@@ -94,8 +94,42 @@ const LEARN_META = {
   math:    { title: '数学乐园', sub: '数数 · 100 以内加减 · 九九乘法表', emoji: '🔢', grad: 'g-orange', steps: '数字认知 → 描一描数字 → 开口认算式 → 口算闯关', filters: null },
   chengyu: { title: '成语接龙', sub: '《登鹳雀楼》20 字龙头 · 每字 12 条成语', emoji: '🐉', grad: 'g-rose', steps: '读整条接龙链 → 描红龙字 → AI跟读成语 → 接龙闯关', filters: null },
 };
-/* 学习页顶部入口 tab（数学等模块按课时练习集自动回退） */
+/* 学习页顶部入口 tab（数学等模块按课时练习集自动回退；字母的「音标」已提升为上方视图切换不入此行；接龙为成语模块专属玩法，不在字母出现） */
 const LEARN_TABS = [['trace', '描红'], ['follow', 'AI跟读'], ['sound', '小游戏'], ['chain', '接龙']];
+function learnTabsOf(module) {
+  return LEARN_TABS.filter(t => t[0] !== 'chain' || module !== 'letters');
+}
+
+/* ---------- 音标音频播放（字母乐园「音标」页签专用，页面级小工具） ----------
+   真人音素音频优先；加载/播放失败时降级到 TTS 播例词（诚实降级，不静默失败） */
+let ipaAudioEl = null;
+let ipaQueueSeq = 0;   // 连播队列世代令牌：单点/切页/停播都会作废旧队列
+function haltIpaAudio() {   // 只停声，不作废旧队列（供连播内部换曲用）
+  if (ipaAudioEl) { try { ipaAudioEl.pause(); } catch (e) {} ipaAudioEl = null; }
+}
+function stopIpaAudio() {   // 用户主动停止：连播队列一并作废
+  ipaQueueSeq++;
+  haltIpaAudio();
+}
+function playIpaAudio(item, cardEl) {
+  stopIpaAudio();
+  TTS.stop();
+  const a = new Audio(ipaAudio(item[1]));
+  ipaAudioEl = a;
+  const fail = () => {
+    if (ipaAudioEl !== a) return;
+    ipaAudioEl = null;
+    TTS.speak({ text: item[2], lang: 'en-US' });
+    UI.toast('音标音频加载失败，改读例词给你听～');
+  };
+  a.onerror = fail;
+  a.play().catch(fail);
+  if (cardEl) {
+    cardEl.classList.add('playing');
+    a.onended = () => { cardEl.classList.remove('playing'); if (ipaAudioEl === a) ipaAudioEl = null; };
+  }
+  UI.sfx.pop();
+}
 
 Pages.learn = (el, module) => {
   if (!LEARN_META[module]) return location.hash = '#/home';
@@ -110,14 +144,19 @@ Pages.learn = (el, module) => {
     <div class="sub-top back-row"><button class="back" id="pgBack">‹</button>
       <div><h1>${meta.title}</h1><small>${meta.sub}</small></div></div>
     <div class="learn-hero ${meta.grad}"><h2>${meta.title}</h2><p>${meta.steps}</p><div class="learn-hero-art">${meta.emoji}</div></div>
+    ${module === 'letters' ? `<div class="view-switch" id="viewSwitch">
+      <button class="active" data-view="letters">A-Z 字母</button>
+      <button data-view="ipa">音标</button>
+    </div>` : ''}
     <div class="learn-tabs" id="learnTabs">
       <button class="active" data-tab="learn">学习</button>
-      ${LEARN_TABS.map(t => `<button data-tab="${t[0]}">${t[1]}</button>`).join('')}
+      ${learnTabsOf(module).map(t => `<button data-tab="${t[0]}">${t[1]}</button>`).join('')}
     </div>
     <div class="lesson-filter" id="flt"></div>
     <div class="lesson-list" id="lessonList"></div>
-    <button class="play-row" id="modPlay" style="width:100%;margin-top:12px"><span>🔊 ${module === 'chengyu' ? '点我听当前课时的成语接龙' : '点我听当前模块标准发音'}</span><span class="rp">播放声音</span></button>`;
-  el.querySelector('#pgBack').onclick = () => { TTS.stop(); location.hash = '#/home'; };
+    <div class="ipa-panel" id="ipaPanel" hidden></div>
+    <button class="play-row" id="modPlay" style="width:100%;margin-top:12px"><span>🔊 ${module === 'chengyu' ? '点我听当前课时的成语接龙' : module === 'letters' ? '点我听当前课时发音（音标页连播全体音标）' : '点我听当前模块标准发音'}</span><span class="rp">播放声音</span></button>`;
+  el.querySelector('#pgBack').onclick = () => { TTS.stop(); stopIpaAudio(); location.hash = '#/home'; };
 
   /* 当前课时：第一个未整体完成的行 */
   const list = Learn.LESSONS(module);
@@ -174,10 +213,55 @@ Pages.learn = (el, module) => {
   }
   learnRefresh = () => { paintList(); };
 
+  /* ---------- 音标页签（仅字母模块）：分类筛选 + 48 音素卡片网格 ---------- */
+  const ipaPanel = el.querySelector('#ipaPanel');
+  let ipaFi = 0;
+  const ipaFilters = ['全部'].concat(IPA_GROUPS.map(g => g.name));
+  function ipaItems() {
+    return ipaFi === 0 ? IPA_GROUPS.flatMap(g => g.items) : IPA_GROUPS[ipaFi - 1].items;
+  }
+  function paintIpa() {
+    ipaPanel.innerHTML = `
+      <div class="lesson-filter ipa-flt" id="ipaFlt">${ipaFilters.map((n, k) => `<button class="${k === ipaFi ? 'active' : ''}" data-f="${k}">${n}</button>`).join('')}</div>
+      <div class="ipa-grid">${ipaItems().map((it, k) => `
+        <div class="ipa-card" data-k="${k}" role="button" tabindex="0">
+          <b class="ipa-sym">/${it[0]}/</b>
+          <span class="ipa-tag">${ipaFi === 0 ? (IPA_GROUPS.find(g => g.items.includes(it)) || {}).name || '' : IPA_GROUPS[ipaFi - 1].name}</span>
+          <button class="ipa-word">${it[2]} · ${it[3]}</button>
+        </div>`).join('')}</div>
+      <p class="study-sub ipa-tip">点卡片听音标标准读音 · 点下方词语听例词</p>`;
+    ipaPanel.querySelectorAll('#ipaFlt button').forEach(b => b.onclick = () => { ipaFi = +b.dataset.f; UI.sfx.tap(); paintIpa(); });
+    ipaPanel.querySelectorAll('.ipa-card').forEach((c, k) => {
+      const it = ipaItems()[k];
+      c.onclick = () => playIpaAudio(it, c);
+      c.querySelector('.ipa-word').onclick = (e) => { e.stopPropagation(); stopIpaAudio(); TTS.stop(); UI.sfx.tap(); TTS.speak([{ text: it[2], lang: 'en-US' }, { text: it[3], lang: 'zh-CN' }]); };
+    });
+  }
+  function showIpa(on) {
+    ipaPanel.hidden = !on;
+    /* 音标视图与学习页签行互斥：回到字母视图时才恢复练习页签/筛选/列表 */
+    el.querySelector('#learnTabs').hidden = on;
+    el.querySelector('#flt').hidden = on;
+    el.querySelector('#lessonList').hidden = on;
+    if (!on) { stopIpaAudio(); return; }
+    paintIpa();
+  }
+
+  /* 字母模块专属视图切换：A-Z 字母（列表+练习）与音标（48 音素面板）互斥展示 */
+  const viewSwitch = el.querySelector('#viewSwitch');
+  if (viewSwitch) viewSwitch.querySelectorAll('button').forEach(b => b.onclick = () => {
+    if (b.classList.contains('active')) return;
+    UI.sfx.tap();
+    viewSwitch.querySelectorAll('button').forEach(x => x.classList.toggle('active', x === b));
+    showIpa(b.dataset.view === 'ipa');
+  });
+
   /* 练习 tab：非「学习」直接打开当前课时对应练习（该课时没有此练习则回退到第一个） */
   el.querySelectorAll('#learnTabs button').forEach(b => b.onclick = () => {
     UI.sfx.tap();
     el.querySelectorAll('#learnTabs button').forEach(x => x.classList.toggle('active', x === b));
+    if (viewSwitch) viewSwitch.querySelector('[data-view="letters"]').classList.add('active');
+    showIpa(false);
     const x = list[curIdx()];
     if (b.dataset.tab === 'learn') return;
     const want = b.dataset.tab === 'game' ? 'sound' : b.dataset.tab;
@@ -187,7 +271,29 @@ Pages.learn = (el, module) => {
     Learn.startPractice(kinds.includes(want) ? want : kinds[0]);
   });
 
-  el.querySelector('#modPlay').onclick = () => { UI.sfx.pop(); TTS.speak(list[curIdx()].play); };
+  el.querySelector('#modPlay').onclick = () => {
+    if (!ipaPanel.hidden) {
+      /* 音标页：连播当前筛选分类的全体音素（真人音频队列，失败项降级 TTS 例词） */
+      UI.sfx.pop();
+      const items = ipaItems();
+      let i = 0;
+      const mySeq = ++ipaQueueSeq;
+      const playNext = () => {
+        if (mySeq !== ipaQueueSeq || i >= items.length || ipaPanel.hidden) return;
+        const it = items[i++];
+        haltIpaAudio(); TTS.stop();
+        const a = new Audio(ipaAudio(it[1]));
+        ipaAudioEl = a;
+        a.onended = () => { if (ipaAudioEl === a) ipaAudioEl = null; setTimeout(playNext, 250); };
+        a.onerror = () => { ipaAudioEl = null; TTS.speak({ text: it[2], lang: 'en-US' }).then(() => setTimeout(playNext, 250)); };
+        a.play().catch(a.onerror);
+      };
+      playNext();
+      UI.toast(`开始连播「${ipaFilters[ipaFi]}」共 ${items.length} 个音标`);
+      return;
+    }
+    UI.sfx.pop(); TTS.speak(list[curIdx()].play);
+  };
   paintFilter(); paintList();
 };
 

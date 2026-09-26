@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#f6fbff" />
 <title>芽芽乐｜中英双语启蒙</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌱</text></svg>" />
-<link rel="stylesheet" href="css/style.css?v=20260926g" />
+<link rel="stylesheet" href="css/style.css?v=20260926j" />
 </head>
 <body class="logged-out">
 <div class="app">
@@ -48,14 +48,23 @@
 <div id="toastLayer" class="toast-layer"></div>
 <canvas id="fxCanvas" class="fx-canvas"></canvas>
 
-<script src="js/data.js?v=20260926g"></script>
-<script src="js/store.js?v=20260926g"></script>
-<script src="js/auth.js?v=20260926g"></script>
-<script src="js/tts.js?v=20260926g"></script>
-<script src="js/ui.js?v=20260926g"></script>
-<script src="js/components.js?v=20260926g"></script>
-<script src="js/learn.js?v=20260926g"></script>
-<script src="js/pages.js?v=20260926g"></script>
-<script src="js/app.js?v=20260926g"></script>
+<script src="js/data.js?v=20260926j"></script>
+<script src="js/store.js?v=20260926j"></script>
+<script src="js/auth.js?v=20260926j"></script>
+<script src="js/tts.js?v=20260926j"></script>
+<script src="js/ui.js?v=20260926j"></script>
+<script src="js/components.js?v=20260926j"></script>
+<script src="js/learn.js?v=20260926j"></script>
+<script src="js/pages.js?v=20260926j"></script>
+<script src="js/app.js?v=20260926j"></script>
+<script>
+/* 构建版本可视化标记：与上方 ?v= 戳同步改，用户看到构建号即确认浏览器跑的是新代码（排障时先怀疑旧标签页/缓存） */
+const APP_BUILD = '20260926j';
+(function showBuild() {
+  const el = document.querySelector('.brand-name small');
+  if (!el) return setTimeout(showBuild, 300);
+  el.insertAdjacentHTML('beforeend', ' <span class="brand-build">build ' + APP_BUILD + '</span>');
+})();
+</script>
 </body>
 </html>

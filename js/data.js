@@ -609,6 +609,72 @@ const SKIN_CATALOG = [
 /* 皮肤成品图路径（webp，加载失败回退 emoji） */
 function skinImg(code, skinId) { return 'assets/pet-skins/' + code + '-' + skinId + '.webp'; }
 
+/* ---------- 国际音标 48 音素（字母乐园「音标」页签） ----------
+   [音标, 音频文件名, 例词, 例词中文]；真人音素音频存于 assets/ipa/（与 26 字母 skin webp 同为随站内容素材，离线可播）
+   分类按国内英语教学通用分法：长元音5 / 短元音7 / 双元音8 / 清辅音11 / 浊辅音17（含鼻音、半元音等），共 48 */
+const IPA_GROUPS = [
+  { name: '长元音', items: [
+    ['iː', 'i-sound2.mp3', 'sheep', '绵羊'],
+    ['ɑː', 'a-sound2.mp3', 'car', '小汽车'],
+    ['ɔː', 'o-sound2.mp3', 'door', '门'],
+    ['uː', 'u-sound2.mp3', 'food', '食物'],
+    ['ɜː', 'er-sound.mp3', 'bird', '小鸟'],
+  ] },
+  { name: '短元音', items: [
+    ['ɪ', 'i-sound.mp3', 'pig', '小猪'],
+    ['e', 'e-sound.mp3', 'bed', '小床'],
+    ['æ', 'an-sound.mp3', 'apple', '苹果'],
+    ['ʌ', '^-sound.mp3', 'cup', '杯子'],
+    ['ɒ', 'o-sound.mp3', 'dog', '小狗'],
+    ['ʊ', 'u-sound.mp3', 'book', '书'],
+    ['ə', 'e^-sound.mp3', 'banana', '香蕉'],
+  ] },
+  { name: '双元音', items: [
+    ['eɪ', 'ei.mp3', 'cake', '蛋糕'],
+    ['aɪ', 'ai.mp3', 'kite', '风筝'],
+    ['ɔɪ', 'oi.mp3', 'boy', '男孩'],
+    ['aʊ', 'ao.mp3', 'cow', '奶牛'],
+    ['əʊ', 'eu.mp3', 'boat', '小船'],
+    ['ɪə', 'ir.mp3', 'ear', '耳朵'],
+    ['eə', 'er.mp3', 'bear', '小熊'],
+    ['ʊə', 'uer.mp3', 'tour', '旅行'],
+  ] },
+  { name: '清辅音', items: [
+    ['p', 'p.mp3', 'pen', '钢笔'],
+    ['t', 't.mp3', 'ten', '十'],
+    ['k', 'k.mp3', 'cat', '小猫'],
+    ['f', 'f.mp3', 'fish', '小鱼'],
+    ['s', 's.mp3', 'sun', '太阳'],
+    ['ʃ', 'ss.mp3', 'ship', '大船'],
+    ['θ', 'si.mp3', 'think', '思考'],
+    ['h', 'h.mp3', 'hat', '帽子'],
+    ['tʃ', 'tss.mp3', 'chair', '椅子'],
+    ['tr', 'tr.mp3', 'tree', '大树'],
+    ['ts', 'ts.mp3', 'cats', '几只猫'],
+  ] },
+  { name: '浊辅音', items: [
+    ['b', 'b.mp3', 'ball', '皮球'],
+    ['d', 'd.mp3', 'dog', '小狗'],
+    ['ɡ', 'g.mp3', 'goat', '山羊'],
+    ['v', 'v.mp3', 'van', '小货车'],
+    ['z', 'z.mp3', 'zip', '拉链'],
+    ['ʒ', 'n3.mp3', 'television', '电视'],
+    ['ð', 'qq.mp3', 'this', '这个'],
+    ['r', 'r.mp3', 'rabbit', '兔子'],
+    ['dʒ', 'd3.mp3', 'jump', '跳'],
+    ['dr', 'dr.mp3', 'dress', '连衣裙'],
+    ['dz', 'dz.mp3', 'beds', '几张床'],
+    ['m', 'm.mp3', 'moon', '月亮'],
+    ['n', 'n.mp3', 'nest', '鸟巢'],
+    ['ŋ', 'ng.mp3', 'sing', '唱歌'],
+    ['l', 'l.mp3', 'lion', '狮子'],
+    ['j', 'j.mp3', 'yes', '是的'],
+    ['w', 'w.mp3', 'water', '水'],
+  ] },
+];
+/* 音素真人音频路径（加载失败时页面降级到 TTS 播例词） */
+function ipaAudio(file) { return 'assets/ipa/' + file; }
+
 /* 奖励规则文案（首页「奖励规则」弹层，与 demo 一致） */
 const RULES = [
   ['英文字母首次通关', '⭐ +12 · 🟡 +20'],

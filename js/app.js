@@ -69,6 +69,7 @@ const APP = (() => {
     const r = routes[name] || routes.home;
     el.dataset.page = r[0];
     TTS.stop();
+    if (typeof stopIpaAudio === 'function') stopIpaAudio();   // 离开路由停掉音标页正在播的音频
     el.innerHTML = '';
     el.scrollTop = 0;
     window.scrollTo(0, 0);

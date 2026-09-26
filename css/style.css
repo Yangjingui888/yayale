@@ -47,6 +47,8 @@ small { font-weight: 400; }
 }
 .brand-name b { display: block; font-size: 20px; letter-spacing: .5px; }
 .brand-name small { color: var(--muted); font-size: 11px; }
+/* 构建版本标记：排障用，确认浏览器加载的是新代码；不引入新色值，仅降低透明度弱化 */
+.brand-build { font-size: 9px; opacity: .55; }
 .hud-back { width: 36px; height: 36px; border-radius: 13px; background: #fff; color: #5b76c8; font-size: 22px; box-shadow: 0 4px 12px #7292bd18; margin-right: 10px; display: grid; place-items: center; }
 .coinbar { display: flex; gap: 6px; }
 .coin { background: #fff; border-radius: 15px; padding: 6px 9px; display: flex; align-items: center; gap: 4px; box-shadow: 0 5px 13px #759bd41c; font-size: 12px; font-weight: 900; }
@@ -159,6 +161,18 @@ small { font-weight: 400; }
 
 /* 字母音标徽章（学习列表行标题旁）——选择器需高于 .lesson-main small */
 .lesson-main small.lesson-ipa { display: inline-block; margin: 0 0 0 6px; padding: 1px 7px; border-radius: 99px; background: #eaf3ff; color: #5874db; font-size: 11px; font-weight: 800; white-space: nowrap; vertical-align: middle; }
+
+/* ---------- 音标页签（字母乐园）：48 音素分类卡片网格，点卡听真人音素音频 ---------- */
+.ipa-panel { padding: 0 0 4px; }
+.ipa-panel .ipa-flt { padding-top: 2px; }
+.ipa-grid { width: 100%; padding: 0 16px; display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 9px; }
+.ipa-card { background: #fff; border-radius: 16px; box-shadow: 0 6px 16px #7796b51a; padding: 11px 8px 9px; display: flex; flex-direction: column; align-items: center; gap: 5px; min-height: 44px; }
+.ipa-card.playing { background: #eaf3ff; box-shadow: 0 0 0 2px #5874db inset, 0 6px 16px #7796b51a; }
+.ipa-sym { font-size: 21px; font-weight: 900; color: #5b79e3; letter-spacing: .5px; }
+.ipa-tag { font-size: 10px; font-weight: 800; color: #7182a0; background: #eef3ff; border-radius: 99px; padding: 2px 8px; }
+.ipa-word { font-size: 11px; color: #d99a2b; background: #fff6e0; border-radius: 11px; padding: 4px 9px; font-weight: 700; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ipa-word:active { transform: scale(.94); background: #ffefce; }
+.ipa-tip { text-align: center; padding: 12px 16px 0; }
 
 /* 拼音四声逐调发声行 */
 .tone-row { margin-top: 12px; padding-top: 12px; border-top: 1px dashed #e4ebf5; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: center; }
@@ -375,9 +389,13 @@ small { font-weight: 400; }
 .no-anim *, .no-anim *::before, .no-anim *::after { animation: none !important; transition: none !important; }
 
 /* ---------- demo：学习页四 tab 与模块底色 ---------- */
-.learn-tabs { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; padding: 0 16px 11px; }
-.learn-tabs button { padding: 10px 3px; border-radius: 14px; background: #eef3fb; color: #7182a0; font-size: 11.5px; font-weight: 800; }
+.learn-tabs { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 16px 11px; }
+.learn-tabs button { flex: 1 1 auto; min-width: 0; padding: 10px 3px; border-radius: 14px; background: #eef3fb; color: #7182a0; font-size: 11.5px; font-weight: 800; }
 .learn-tabs button.active { background: #fff; color: #526fd6; box-shadow: 0 6px 14px #7796b522; }
+/* 字母模块视图切换（A-Z 字母 / 音标）：色值全部取自 :root token，触控高度≥44px */
+.view-switch { display: flex; gap: 8px; margin: 0 16px 11px; }
+.view-switch button { flex: 1; min-height: 44px; border-radius: 15px; background: var(--line); color: var(--muted); font-size: 13.5px; font-weight: 800; }
+.view-switch button.active { background: var(--blue); color: var(--card); box-shadow: var(--shadow); }
 .g-blue { background: linear-gradient(135deg, #dcf1ff, #e8ecff); }
 .g-pink { background: linear-gradient(135deg, #ffe7ea, #fff3d6); }
 .g-yellow { background: linear-gradient(135deg, #fff1c8, #ffe7e8); }
@@ -456,7 +474,7 @@ small { font-weight: 400; }
   .hero { margin: 4px 11px 12px; padding: 15px 13px 13px; }
   .hero h1 { font-size: 21px; }
   .hero-pet { font-size: 46px; }
-  .modules, .lesson-list, .pets-wrap, .lesson-filter, .learn-tabs { padding-left: 11px; padding-right: 11px; }
+  .modules, .lesson-list, .pets-wrap, .lesson-filter, .learn-tabs, .ipa-grid { padding-left: 11px; padding-right: 11px; }
   .module { min-height: 118px; padding: 12px 11px; }
   .module b { font-size: 15px; }
   .progress-card, .pet-teaser { margin-left: 11px; margin-right: 11px; }
@@ -579,8 +597,10 @@ small { font-weight: 400; }
   .view[data-page="learn"] .sub-top { grid-column: 1 / -1; margin: 0 -24px; }
   .view[data-page="learn"] .learn-hero { grid-column: 1; margin: 0 0 16px; position: sticky; top: 96px; align-self: start; }
   .view[data-page="learn"] .learn-tabs,
+  .view[data-page="learn"] .view-switch,
   .view[data-page="learn"] .lesson-filter,
   .view[data-page="learn"] .lesson-list,
+  .view[data-page="learn"] .ipa-panel,
   .view[data-page="learn"] .play-row { grid-column: 2; margin-left: 0; margin-right: 0; padding-left: 0; padding-right: 0; }
   .view[data-page="learn"] .play-row { margin-top: 16px; }
   /* 家长中心：卡片两列 */

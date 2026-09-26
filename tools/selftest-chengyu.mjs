@@ -135,12 +135,15 @@ async function main() {
   check('整课完成记录', await evalInPage(`() => Store.state.completed.includes('chengyu-0_0')`));
   check('已学接龙统计 +1', await evalInPage(`() => Store.state.learned.chengyu >= 1`));
 
-  /* ⑥ 跨模块接龙 tab 提示 */
+  /* ⑥ 字母模块不再展示接龙页签；非成语模块点接龙仍弹提示 */
   await evalInPage(`() => { Learn.closeSheet(); location.hash = '#/learn/letters'; return true; }`);
+  await sleep(600);
+  check('字母模块无接龙页签', await evalInPage(`() => [...document.querySelectorAll('#learnTabs button')].every(b => b.dataset.tab !== 'chain')`));
+  await evalInPage(`() => { location.hash = '#/learn/words'; return true; }`);
   await sleep(600);
   await evalInPage(`() => { [...document.querySelectorAll('#learnTabs button')].find(b => b.dataset.tab === 'chain').click(); return true; }`);
   await sleep(300);
-  check('字母模块点接龙出现提示', await evalInPage(`() => [...document.querySelectorAll('.toast, [class*=toast]')].some(e => e.textContent.includes('成语接龙'))`) || await evalInPage(`() => document.body.textContent.includes('接龙闯关在')`));
+  check('单词模块点接龙出现提示', await evalInPage(`() => [...document.querySelectorAll('.toast, [class*=toast]')].some(e => e.textContent.includes('成语接龙'))`) || await evalInPage(`() => document.body.textContent.includes('接龙闯关在')`));
 
   /* ⑦ 页面 JS 错误收集 */
   const errs = await evalInPage(`() => window.__errs`);
