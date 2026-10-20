@@ -8,8 +8,9 @@ const Store = (() => {
     points: 0,              // 积分余额（购粮消耗；买皮肤耗星星）
     stars: 0,               // 星星余额
     lifetimePoints: 0,      // 累计积分（解锁依据，只增不减）
-    completed: [],          // 已完成的课时 key（首次通关判定）
-    practiceRecords: [],    // 练习记录（近 500 条，带 1-3 星评分，练习打勾依据）
+    completed: [],          // 已完成的课时 key（首次通关判定，无界永久）
+    progress: {},           // {课时key: {练习kind: true}} 各环节永久打勾状态（无界，与有界 practiceRecords 解耦）
+    practiceRecords: [],    // 练习记录（近 500 条，带 1-3 星评分；仅用于展示历史，不作为完成状态唯一来源）
     learned: { letters: 0, words: 0, hanzi: 0, pinyin: 0, math: 0, chengyu: 0 },
     minutes: 0,             // 总学习分钟（completeTask +1，兼容 tick 秒表）
     seconds: 0,
@@ -123,9 +124,18 @@ const Store = (() => {
   function recordPractice(module, index, kind, title, value, score) {
     s.practiceRecords.push({ id: Date.now() + '-' + Math.random().toString(36).slice(2, 7), module, index, kind, title, value, score: score || 3, completedAt: new Date().toISOString() });
     if (s.practiceRecords.length > 500) s.practiceRecords = s.practiceRecords.slice(-500);
-    markDaily(keyOf(module, index));
+    /* 永久进度与有界日志分离：练习记录被 500 条裁剪后，完成状态仍以 progress 为准，不回退 */
+    const k = keyOf(module, index);
+    if (!s.progress[k]) s.progress[k] = {};
+    s.progress[k][kind] = true;
+    markDaily(k);
   }
   function practiceDone(module, index, kind) {
+    const k = keyOf(module, index);
+    const p = s.progress[k];
+    if (p && (p[kind] || (kind === 'sound' && p.game))) return true;
+    /* 兼容旧存档 / 已被裁剪的历史记录：整课首次通关过，则所有环节都视为完成 */
+    if (s.completed.includes(k)) return true;
     return s.practiceRecords.some(r => r.module === module && String(r.index) === String(index) && (r.kind === kind || (kind === 'sound' && r.kind === 'game')));
   }
   /* 练习记录展示：同一「课时 x 练习类型」只保留最新一条（旧存档无评分按 3 星），时间倒序 */

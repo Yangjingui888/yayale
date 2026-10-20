@@ -38,7 +38,9 @@ Pages.home = (el) => {
   const need = nextPet ? ECON.unlockAt(n) : 0;
   const gap = nextPet ? Math.max(0, need - s.lifetimePoints) : 0;
   const teaserPet = PETS[pi];
-  const done = Math.min(MODULE_TOTAL, s.completed.length);
+  /* 今日学习进度卡：用「今天练过的课时数」（dailyCount，跨天自动归零），
+     不能用 s.completed.length（历史累计通关数，会导致卡片常年显示满格、与今日无关） */
+  const done = Store.dailyCount();
 
   el.innerHTML = `
     <div class="hero">
