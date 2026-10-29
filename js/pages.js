@@ -16,9 +16,23 @@ function greet() {
   return h < 12 ? '早上好' : h < 18 ? '下午好' : '晚上好';
 }
 
-/* 皮肤图（成品 webp + emoji 兜底，demo skinVisual 结构） */
+/* 皮肤图（成品 webp + emoji 兜底 + CSS 视觉皮肤系统） */
 function skinVisual(pet, skinId) {
-  return `<span class="wear-stack"><img class="pet-photo" src="${skinImg(pet.L, skinId)}" alt="${pet.name} · ${skinId}" onerror="skinImgFail(this)"><span class="skin-fallback">${pet.em}</span></span>`;
+  /* 每套皮肤的独特配饰（保持宠物本体 + 皮肤特色配饰） */
+  const skinAccessories = {
+    forest: '',
+    party: '<span class="skin-hat">🎉</span>',
+    chef: '<span class="skin-hat">👨‍🍳</span>',
+    pirate: '<span class="skin-hat">‍☠️</span>',
+    royal: '<span class="skin-hat"></span>',
+    candy: '<span class="skin-hat">🌈</span>',
+    hero: '<span class="skin-hat"></span>',
+    ocean: '<span class="skin-hat">🐠</span>',
+    space: '<span class="skin-hat"></span>',
+    dream: '<span class="skin-hat">✨</span>',
+  };
+  const accessory = skinAccessories[skinId] || '';
+  return `<span class="wear-stack" data-skin="${skinId}"><img class="pet-photo" src="${skinImg(pet.L, skinId)}" alt="${pet.name} · ${skinId}" onerror="skinImgFail(this)"><span class="skin-fallback">${pet.em}${accessory}</span></span>`;
 }
 function skinLabel(id) { const s = SKIN_CATALOG.find(x => x[0] === id); return s ? s[1] : '自然森林'; }
 
@@ -346,7 +360,6 @@ Pages.pet = (el, arg) => {
   const p = PETS[idx];
   const draw = () => {
     const lv = Store.petLevel(idx), aff = Number(Store.state.affection[idx] || 0);
-    const food = Store.foodCount(idx);
     const skin = Store.curSkin(idx);
     const lvMax = lv >= ECON.maxLevel;
     const heartPct = lvMax ? 100 : (aff % ECON.feedGain) / ECON.feedGain * 100;
@@ -356,16 +369,17 @@ Pages.pet = (el, arg) => {
       <div class="detail-hero">
         <div class="big-pet" id="petStage">${skinVisual(p, skin)}</div>
         <h2 id="petName">${p.L} · ${p.en} ${p.name} <button class="play-word" id="sayEn">🔊</button></h2>
-        <p>专属食物：${p.food[2]} ${p.food[0]} ${p.food[1]}</p>
+        <p>专属食物：${p.food.map(f => f[2]).join(' ')}</p>
         <div class="heart-bar"><span>好感度 Lv${lv}　${'♥'.repeat(lv)}${'♡'.repeat(ECON.maxLevel - lv)}</span>
           <div class="bar"><i class="heart-fill" style="width:${heartPct}%"></i></div></div>
       </div>
       <div class="detail-card">
+        ${p.food.map((f, fi) => `
         <div class="food-line">
-          <div class="food-icon">${p.food[2]}</div>
-          <div><b>${p.food[0]} · ${p.food[1]}</b><small>只给 ${p.name} 的专属食物</small></div>
-          <div class="food-count"><span>${food}</span><small> / ${ECON.foodCap}</small></div>
-        </div>
+          <div class="food-icon">${f[2]}</div>
+          <div><b>${f[0]} · ${f[1]}</b><small>只给 ${p.name} 的专属食物</small></div>
+          <div class="food-count"><span>${Store.foodCount(idx, fi)}</span><small> / ${ECON.foodCap}</small></div>
+        </div>`).join('')}
       </div>
       <div class="detail-actions">
         <button id="actBuy">🛒 去商店购粮</button>
@@ -374,7 +388,7 @@ Pages.pet = (el, arg) => {
       </div>
       <div class="detail-card">
         <div class="section-head" style="padding:0 0 5px"><h2 style="font-size:15px">我的皮肤</h2>
-          <span id="skinBalance">⭐ ${Store.state.stars} · 8 套主题（4原色+4彩色）</span></div>
+          <span id="skinBalance">⭐ ${Store.state.stars} · 10 套主题（5原色+5彩色）</span></div>
         <div class="skins" id="skinList">
           ${SKIN_CATALOG.map(s => {
             const owned = Store.skinOwned(idx, s[0]), active = skin === s[0];
@@ -394,7 +408,12 @@ Pages.pet = (el, arg) => {
 
     /* ---- 投喂：抛物线飞入 + 好感升级（demo 外观 + PRD 数值） ---- */
     function feed() {
-      if (!Store.takeFood(idx)) {
+      /* 找到第一个有库存的食物槽位 */
+      let slot = -1;
+      for (let i = 0; i < p.food.length; i++) {
+        if (Store.foodCount(idx, i) > 0) { slot = i; break; }
+      }
+      if (slot < 0 || !Store.takeFood(idx, slot)) {
         UI.sfx.wrong();
         UI.toast('没有口粮啦，先去商店购粮吧～');
         TTS.speak({ text: '没有食物了，先去商店购买食物吧', lang: 'zh-CN' });
@@ -403,7 +422,7 @@ Pages.pet = (el, arg) => {
       UI.sfx.feed();
       const stage = el.querySelector('#petStage');
       const fly = document.createElement('span');
-      fly.textContent = p.food[2];
+      fly.textContent = p.food[slot][2];
       fly.style.cssText = 'position:absolute;font-size:40px;left:50%;bottom:6px;z-index:5;transition:all .7s cubic-bezier(.5,-.4,.9,.6)';
       stage.appendChild(fly);
       requestAnimationFrame(() => requestAnimationFrame(() => {
@@ -427,36 +446,43 @@ Pages.pet = (el, arg) => {
       }, 700);
     }
 
-    /* ---- 购粮弹层（补 demo 死链：10 积分/份，扣余额） ---- */
+    /* ---- 购粮弹层（3 种食物可选，10 积分/份，扣余额） ---- */
     function shopModal() {
-      const atCap = Store.foodCount(idx) >= ECON.foodCap;
       const d = openSheet(`
         <div class="sheet-head"><h3>🛒 ${p.name}的专属粮仓</h3><button class="close" data-x="hide">×</button></div>
-        <p class="study-sub">这里只有 <b>${p.name}</b> 爱吃的食物哦</p>
+        <p class="study-sub"><b>${p.name}</b> 爱吃这些食物哦</p>
+        ${p.food.map((f, fi) => {
+          const cnt = Store.foodCount(idx, fi);
+          const atCap = cnt >= ECON.foodCap;
+          return `
         <div class="sheet-item">
-          <span class="food-big">${p.food[2]}</span>
-          <div class="sheet-item-main"><b>${p.food[0]} · ${p.food[1]}</b><small>现有 ${Store.foodCount(idx)} 个（上限 ${ECON.foodCap}）</small></div>
-          <button class="buy" id="doBuy">${atCap ? '已满' : `🟡${ECON.foodPrice}<br>购买`}</button>
-        </div>
+          <span class="food-big">${f[2]}</span>
+          <div class="sheet-item-main"><b>${f[0]} · ${f[1]}</b><small>现有 ${cnt} 个（上限 ${ECON.foodCap}）</small></div>
+          <button class="buy" data-slot="${fi}">${atCap ? '已满' : `🟡${ECON.foodPrice}<br>购买`}</button>
+        </div>`;
+        }).join('')}
         <p class="study-sub" style="margin-top:12px">可用积分：<b class="t-points">🟡${Store.state.points}</b>（购买只扣积分，不影响累计解锁进度）`);
-      d.el.querySelector('#doBuy').onclick = () => {
-        if (atCap) return;
-        if (!Store.spendPoints(ECON.foodPrice)) {
-          UI.toast('积分还不够，去学习攒一攒吧～');
-          TTS.speak({ text: '积分不够啦，去学习可以攒积分哦', lang: 'zh-CN' });
-          UI.sfx.wrong(); return;
-        }
-        Store.addFood(idx, 1);
-        UI.sfx.star(); UI.toast('购买成功！');
-        draw(); shopModal();   // 刷新弹层内库存/积分数字
-      };
+      d.el.querySelectorAll('.buy').forEach(btn => {
+        btn.onclick = () => {
+          const fi = Number(btn.dataset.slot);
+          if (Store.foodCount(idx, fi) >= ECON.foodCap) return;
+          if (!Store.spendPoints(ECON.foodPrice)) {
+            UI.toast('积分还不够，去学习攒一攒吧～');
+            TTS.speak({ text: '积分不够啦，去学习可以攒积分哦', lang: 'zh-CN' });
+            UI.sfx.wrong(); return;
+          }
+          Store.addFood(idx, fi, 1);
+          UI.sfx.star(); UI.toast('购买成功！');
+          draw(); shopModal();   // 刷新弹层内库存/积分数字
+        };
+      });
     }
 
     /* ---- 换装弹层（demo openDress 结构） ---- */
     function dressModal() {
       const d = openSheet(`
         <div class="sheet-head"><h3>给 ${p.name} 换装</h3><button class="close" data-x="hide">×</button></div>
-        <p class="study-sub" style="margin:10px 0 4px">每只动物专属 8 套成品图：4 套原色、4 套彩色 · 当前 ⭐ ${Store.state.stars}</p>
+        <p class="study-sub" style="margin:10px 0 4px">每只动物专属 10 套成品图：5 套原色、5 套彩色 · 当前 ⭐ ${Store.state.stars}</p>
         <div class="dress-grid">
           ${SKIN_CATALOG.map(s => {
             const owned = Store.skinOwned(idx, s[0]), active = Store.curSkin(idx) === s[0];

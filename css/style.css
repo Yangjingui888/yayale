@@ -432,6 +432,21 @@ small { font-weight: 400; }
 .pet-art .wear-stack, .skin-preview .wear-stack, .dress-preview .wear-stack { font-size: 42px; }
 .skin-preview { display: grid; place-items: center; height: 56px; font-size: 42px; }
 
+/* ---------- CSS 视觉皮肤系统（图片缺失时的独特视觉效果） ---------- */
+.skin-hat { position: absolute; top: -10px; right: -5px; font-size: 0.5em; line-height: 1; }
+/* 原色系列 */
+.wear-stack[data-skin="forest"] .skin-fallback { filter: none; }
+.wear-stack[data-skin="party"] .skin-fallback { filter: hue-rotate(240deg) saturate(1.5); }
+.wear-stack[data-skin="chef"] .skin-fallback { filter: sepia(0.3) brightness(1.1); }
+.wear-stack[data-skin="pirate"] .skin-fallback { filter: grayscale(0.6) contrast(1.3); }
+.wear-stack[data-skin="royal"] .skin-fallback { filter: hue-rotate(45deg) saturate(1.3) brightness(1.1); }
+/* 彩色系列 */
+.wear-stack[data-skin="candy"] .skin-fallback { filter: hue-rotate(90deg) saturate(1.8); }
+.wear-stack[data-skin="hero"] .skin-fallback { filter: hue-rotate(180deg) saturate(1.4); }
+.wear-stack[data-skin="ocean"] .skin-fallback { filter: hue-rotate(200deg) saturate(1.6) brightness(0.95); }
+.wear-stack[data-skin="space"] .skin-fallback { filter: hue-rotate(270deg) saturate(1.5) brightness(0.9); }
+.wear-stack[data-skin="dream"] .skin-fallback { filter: hue-rotate(320deg) saturate(2) brightness(1.1); }
+
 /* ---------- 换装弹层 dress-grid ---------- */
 .dress-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 9px; margin-top: 12px; }
 .dress-card { background: #f6f8fb; border: 2px solid transparent; border-radius: 15px; padding: 10px 4px; }

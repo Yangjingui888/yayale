@@ -140,7 +140,7 @@ const UI = (() => {
         <p class="study-sub">你已经累计获得 ${Store.state.lifetimePoints} 积分</p>
         <div class="achievement"><div class="badge">${p.em}</div>
           <div><b>${p.L} · ${p.en} ${p.name}</b>
-          <small>专属食物：${p.food[2]} ${p.food[0]} · ${p.food[1]}</small></div>
+          <small>专属食物：${p.food.map(f => f[2] + ' ' + f[0]).join(' · ')}</small></div>
         </div>
       </div>`;
     mask.classList.add('show');

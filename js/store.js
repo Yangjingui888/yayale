@@ -4,7 +4,7 @@ const Store = (() => {
   const OLD_KEY = 'qiqu启蒙乐园v1';        // 升级前的单一存档（迁移给首个登录账号）
   const MIG_KEY = 'qiqu-启蒙乐园-migrated';
   const defaultState = () => ({
-    v: 2,                   // 存档版本：旧版结构自动重置
+    v: 3,                   // 存档版本：v2→v3 食物结构从单一数字改为 [n,n,n] 三槽位
     points: 0,              // 积分余额（购粮消耗；买皮肤耗星星）
     stars: 0,               // 星星余额
     lifetimePoints: 0,      // 累计积分（解锁依据，只增不减）
@@ -19,7 +19,7 @@ const Store = (() => {
     clean: true,            // 纯净模式（徽章展示）
     pet: 0,                 // 当前查看的宠物索引
     affection: {},          // {petIdx: 好感值}（Lv = floor(aff/20)+1，封顶 5）
-    food: {},               // {petIdx: 食物库存}（上限 99）
+    food: {},               // {petIdx: [食物0库存, 食物1库存, 食物2库存]}（每槽上限 99）
     skinOwned: {},          // {petIdx: {skinId: true}}（forest 恒拥有）
     skinEquipped: {},       // {petIdx: skinId}
     daily: { date: '', keys: [] },   // 今日练过的课时（首页进度卡）
@@ -55,7 +55,19 @@ const Store = (() => {
       const raw = localStorage.getItem(SAVE_PREFIX + user);
       if (raw) {
         const obj = JSON.parse(raw);
-        if (obj && obj.v === 2) return Object.assign(defaultState(), obj);   // 旧结构自动重置
+        if (obj && obj.v === 3) return Object.assign(defaultState(), obj);   // 当前版本直接装载
+        if (obj && obj.v === 2) {
+          /* v2→v3 迁移：食物库存从单一数字改为 [n,0,0] 三槽位（旧食物全部归入第一槽） */
+          const migrated = Object.assign(defaultState(), obj);
+          migrated.v = 3;
+          if (migrated.food && typeof migrated.food === 'object') {
+            for (const k of Object.keys(migrated.food)) {
+              const old = Number(migrated.food[k] || 0);
+              migrated.food[k] = [old, 0, 0];
+            }
+          }
+          return migrated;
+        }
       }
     } catch (e) {}
     return defaultState();
@@ -108,9 +120,10 @@ const Store = (() => {
     return Math.round((Number(s.affection[idx] || 0) % ECON.feedGain) / ECON.feedGain * 100);
   }
   function isUnlocked(idx) { return idx < unlockCount(); }
-  function addFood(idx, n) { s.food[idx] = Math.min(ECON.foodCap, (s.food[idx] || 0) + n); save(); }
-  function foodCount(idx) { return s.food[idx] || 0; }
-  function takeFood(idx) { if (!s.food[idx]) return false; s.food[idx]--; save(); return true; }
+  function ensureFood(idx) { if (!Array.isArray(s.food[idx])) s.food[idx] = [0, 0, 0]; return s.food[idx]; }
+  function addFood(idx, slot, n) { const arr = ensureFood(idx); arr[slot] = Math.min(ECON.foodCap, (arr[slot] || 0) + n); save(); }
+  function foodCount(idx, slot) { const arr = ensureFood(idx); return slot !== undefined ? (arr[slot] || 0) : arr.reduce((a, b) => a + (b || 0), 0); }
+  function takeFood(idx, slot) { const arr = ensureFood(idx); if (!arr[slot]) return false; arr[slot]--; save(); return true; }
   function addAffection(idx, n) { s.affection[idx] = Number(s.affection[idx] || 0) + n; save(); }
   function skinOwned(idx, id) { return id === 'forest' || !!(s.skinOwned[idx] && s.skinOwned[idx][id]); }
   function buySkin(idx, id) { s.skinOwned[idx] = Object.assign({}, s.skinOwned[idx], { [id]: true }); save(); }
@@ -171,7 +184,7 @@ const Store = (() => {
       learned: s.learned, minutes: Math.max(s.minutes, Math.floor(s.seconds / 60)),
       petsUnlocked: n, stars: s.stars, points: s.points, lifetime: s.lifetimePoints,
       avgLevel: n ? Math.max(1, Math.round(affSum / n / 20) + 1) : 1,
-      foodTotal: Object.values(s.food).reduce((a, b) => a + Number(b || 0), 0),
+      foodTotal: Object.values(s.food).reduce((a, v) => a + (Array.isArray(v) ? v.reduce((x, y) => x + (y || 0), 0) : Number(v || 0)), 0),
     };
   }
 
@@ -180,7 +193,17 @@ const Store = (() => {
   function importCode(code) {
     try {
       const obj = JSON.parse(decodeURIComponent(escape(atob(code.trim()))));
-      if (typeof obj !== 'object' || obj.v !== 2) return false;
+      if (typeof obj !== 'object' || !obj.v || obj.v > 3) return false;
+      /* v2 导入兼容：迁移食物结构 */
+      if (obj.v === 2) {
+        obj.v = 3;
+        if (obj.food && typeof obj.food === 'object') {
+          for (const k of Object.keys(obj.food)) {
+            const old = Number(obj.food[k] || 0);
+            obj.food[k] = [old, 0, 0];
+          }
+        }
+      }
       s = Object.assign(defaultState(), obj); save(); return true;
     } catch (e) { return false; }
   }
