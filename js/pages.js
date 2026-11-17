@@ -321,7 +321,7 @@ Pages.pets = (el) => {
   const need = next ? ECON.unlockAt(n) : 0;
   el.innerHTML = `
     <div class="sub-top back-row"><button class="back" id="pgBack">‹</button>
-      <div><h1>宠物小屋</h1><small>收集 26 位字母小伙伴</small></div></div>
+      <div><h1>宠物小屋</h1><small>收集 26 位字母小伙伴 · 点未解锁的朋友可预览新衣服</small></div></div>
     <div class="pets-wrap">
       <div class="pet-banner"><div><h2>我的小伙伴</h2><p>累计积分，按 A-Z 顺序解锁 · 积分不清零</p></div><div class="pet-banner-art">🏡</div></div>
       <div class="pet-progress">${next
@@ -343,12 +343,8 @@ Pages.pets = (el) => {
   el.querySelector('#pgBack').onclick = () => { TTS.stop(); location.hash = '#/home'; };
   el.querySelectorAll('.pet').forEach(b => b.onclick = () => {
     const i = +b.dataset.i;
-    if (Store.isUnlocked(i)) { UI.sfx.tap(); location.hash = `#/pet/${i}`; }
-    else {
-      UI.sfx.wrong();
-      const prev = i === 0 || i - 1 < n;
-      UI.toast(prev ? `还差 ${Math.max(0, ECON.unlockAt(i) - s.lifetimePoints)} 积分就能解锁啦！` : '请先解锁上一只宠物');
-    }
+    /* 未解锁也可进入预览模式：看皮肤激起学习欲望（只读，不可购买/穿戴） */
+    UI.sfx.tap(); location.hash = `#/pet/${i}`;
   });
   setTimeout(() => UI.checkUnlockCelebration(), 400);
 };
@@ -356,16 +352,17 @@ Pages.pets = (el) => {
 /* ---------- ④ 宠物详情页（购粮 / 投喂 / 换装一站式） ---------- */
 Pages.pet = (el, arg) => {
   const idx = +arg;
-  if (!Store.isUnlocked(idx)) return location.hash = '#/pets';
   const p = PETS[idx];
+  const locked = !Store.isUnlocked(idx);   // 未解锁 = 只读预览模式（看皮肤、看进度，不可购买/穿戴/投喂）
   const draw = () => {
+    if (locked) return drawPreview();
     const lv = Store.petLevel(idx), aff = Number(Store.state.affection[idx] || 0);
     const skin = Store.curSkin(idx);
     const lvMax = lv >= ECON.maxLevel;
     const heartPct = lvMax ? 100 : (aff % ECON.feedGain) / ECON.feedGain * 100;
     el.innerHTML = `
       <div class="sub-top back-row"><button class="back" id="pgBack">‹</button>
-        <div><h1 style="font-size:17px">${p.L} · ${p.en} ${p.name}</h1><small>一站式养成小天地</small></div></div>
+        <div><h1 class="pet-title">${p.L} · ${p.en} ${p.name}</h1><small>一站式养成小天地</small></div></div>
       <div class="detail-hero">
         <div class="big-pet" id="petStage">${skinVisual(p, skin)}</div>
         <h2 id="petName">${p.L} · ${p.en} ${p.name} <button class="play-word" id="sayEn">🔊</button></h2>
@@ -387,7 +384,7 @@ Pages.pet = (el, arg) => {
         <button id="actDress">✨ 换装</button>
       </div>
       <div class="detail-card">
-        <div class="section-head" style="padding:0 0 5px"><h2 style="font-size:15px">我的皮肤</h2>
+        <div class="section-head flush"><h2>我的皮肤</h2>
           <span id="skinBalance">⭐ ${Store.state.stars} · 10 套主题（5原色+5彩色）</span></div>
         <div class="skins" id="skinList">
           ${SKIN_CATALOG.map(s => {
@@ -519,7 +516,60 @@ Pages.pet = (el, arg) => {
       draw();
     }
   };
+
+  /* ---- 未解锁预览模式：彩色皮肤橱窗 + 解锁进度 + 学习引导（只读） ---- */
+  function drawPreview() {
+    const skin = Store.curSkin(idx);
+    const pts = Store.state.lifetimePoints, need = ECON.unlockAt(idx);
+    const prevOk = idx === 0 || Store.isUnlocked(idx - 1);
+    const progress = prevOk
+      ? `<strong>${pts} / ${need} 积分</strong> · 再攒 ${Math.max(0, need - pts)} 积分就能解锁 ${p.name}<div class="bar"><i style="width:${Math.min(100, pts / need * 100)}%"></i></div>`
+      : `<strong>先解锁 ${PETS[idx - 1].L} · ${PETS[idx - 1].name}</strong> · 再攒积分迎接 ${p.name}`;
+    el.innerHTML = `
+      <div class="sub-top back-row"><button class="back" id="pgBack">‹</button>
+        <div><h1 class="pet-title">${p.L} · ${p.en} ${p.name}</h1><small>还未解锁 · 新衣服预览</small></div></div>
+      <div class="detail-hero">
+        <div class="big-pet" id="petStage">${skinVisual(p, skin)}</div>
+        <h2 id="petName">${p.L} · ${p.en} ${p.name} <button class="play-word" id="sayEn">🔊</button></h2>
+        <p>专属食物：${p.food.map(f => f[2]).join(' ')}</p>
+        <div class="pet-progress">${progress}</div>
+      </div>
+      <div class="detail-actions single">
+        <button class="a-buy" id="actStudy">🟡 去学习攒积分 · 解锁 ${p.name}</button>
+      </div>
+      <div class="detail-card">
+        <div class="section-head flush"><h2>皮肤橱窗预览</h2>
+          <span>10 套主题 · 解锁后可装扮</span></div>
+        <div class="skins" id="skinList">
+          ${SKIN_CATALOG.map(s => `
+            <button class="skin" data-skin="${s[0]}">
+              <span class="skin-preview">${skinVisual(p, s[0])}</span>
+              <small>${s[1]} · ${s[4]}</small>
+              <em>${s[3]}⭐</em></button>`).join('')}
+        </div>
+        <p class="study-sub t-center" style="margin-top:10px">点任意一套看大图 · 解锁 ${p.name} 并攒够 ⭐ 就能给它穿上</p>
+      </div>`;
+    el.querySelector('#pgBack').onclick = () => { TTS.stop(); location.hash = '#/pets'; };
+    el.querySelector('#sayEn').onclick = () => TTS.speak([{ text: p.en, lang: 'en-US' }, { text: p.name, lang: 'zh-CN' }]);
+    el.querySelector('#actStudy').onclick = () => { UI.sfx.tap(); location.hash = '#/home'; };
+    el.querySelectorAll('#skinList .skin').forEach(b => b.onclick = () => { UI.sfx.tap(); previewSkin(b.dataset.skin); });
+  }
+
+  /* ---- 预览大图弹层（只读：无购买按钮，只有学习引导） ---- */
+  function previewSkin(skinId) {
+    const cat = SKIN_CATALOG.find(x => x[0] === skinId);
+    if (!cat) return;
+    const d = openSheet(`
+      <div class="sheet-head"><h3>${cat[1]} · ${cat[4]}</h3><button class="close" data-x="hide">×</button></div>
+      <div class="skin-big">${skinVisual(p, skinId)}</div>
+      <p class="study-sub t-center" style="margin-top:10px"><b>${p.name}</b> 的 ${cat[1]} 套装 · ${cat[3]}⭐</p>
+      <p class="study-sub t-center" style="margin-top:6px">解锁 ${p.name} 并攒够星星，就能给它穿上这套衣服～</p>
+      <div class="detail-actions single"><button class="a-buy" id="pvStudy">🟡 去学习攒积分</button></div>`);
+    d.el.querySelector('#pvStudy').onclick = () => { d.close(); UI.sfx.tap(); location.hash = '#/home'; };
+  }
+
   draw();
+  if (locked) TTS.speak({ text: `${p.name}还没解锁，先看看它的新衣服吧！`, lang: 'zh-CN' });
 };
 
 /* ---------- ⑤ 家长中心（demo 三卡 + 存档备份 + 家长门） ---------- */

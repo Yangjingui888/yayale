@@ -455,6 +455,15 @@ small { font-weight: 400; }
 .dress-card.active { background: #eaf0ff; border-color: #7890ee; }
 .dress-card.locked { opacity: .78; }
 
+/* ---------- 未解锁宠物预览模式（只读橱窗：复用既有组件，无新增色值） ---------- */
+.pet-title { font-size: 17px; }
+.section-head.flush { padding: 0 0 5px; }
+.t-center { text-align: center; }
+.detail-actions.single { grid-template-columns: 1fr; }
+.sheet .detail-actions { margin: 12px 0 0; }
+.detail-hero .pet-progress { margin: 10px 0 0; text-align: left; }
+.skin-big { display: grid; place-items: center; margin-top: 6px; font-size: 150px; }
+
 /* ---------- 小游戏：听音识图 / 图文配对 ---------- */
 .quiz-picture { font-size: 64px; line-height: 1.2; margin: 8px 0 2px; }
 .quiz-picture.sm { font-size: 38px; margin: 0; }
